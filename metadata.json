@@ -1,0 +1,9 @@
+{
+  "name": "LocalLink Hyperlocal Marketplace",
+  "description": "A hyperlocal marketplace connecting local customers with small businesses in Tier 2-4 towns using AI-assisted voice request management.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
