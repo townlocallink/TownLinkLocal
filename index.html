@@ -29,22 +29,19 @@
         -webkit-tap-highlight-color: transparent;
         overscroll-behavior-y: contain;
       }
-      /* Prevent text selection to feel more like a native app */
       .no-select {
         user-select: none;
         -webkit-user-select: none;
       }
-      /* Hide scrollbar for Chrome, Safari and Opera */
       .no-scrollbar::-webkit-scrollbar {
         display: none;
       }
-      /* Hide scrollbar for IE, Edge and Firefox */
       .no-scrollbar {
-        -ms-overflow-style: none;  /* IE and Edge */
-        scrollbar-width: none;  /* Firefox */
+        -ms-overflow-style: none;
+        scrollbar-width: none;
       }
     </style>
-  <script type="importmap">
+    <script type="importmap">
 {
   "imports": {
     "@google/genai": "https://esm.sh/@google/genai@^1.37.0",
@@ -58,8 +55,10 @@
   }
 }
 </script>
-</head>
+  </head>
   <body class="bg-gray-50 text-gray-900 selection:bg-indigo-100 selection:text-indigo-900 no-select">
     <div id="root"></div>
+    <!-- This line below is the "bridge" that fixes the blank screen -->
+    <script type="module" src="index.tsx"></script>
   </body>
 </html>
