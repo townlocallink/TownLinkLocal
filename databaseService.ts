@@ -1,5 +1,5 @@
 
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { 
   getFirestore, 
   collection, 
@@ -27,16 +27,23 @@ const firebaseConfig = {
   measurementId: "G-C3LCEMNQP5"
 };
 
-// Initialize Firebase App
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+// Initialize Firebase App instance safely
+let app: FirebaseApp;
+try {
+  app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+} catch (e) {
+  console.error("LocalLink: Firebase App Initialization Failed", e);
+}
 
-// Initialize Firestore with safer error handling
+// Initialize Firestore
 let db: Firestore | null = null;
 try {
-  db = getFirestore(app);
-  console.log("LocalLink: Cloud Database Initialized Successfully");
+  if (app!) {
+    db = getFirestore(app);
+    console.log("LocalLink: Cloud Database Initialized Successfully");
+  }
 } catch (error) {
-  console.error("LocalLink: Failed to initialize Firestore", error);
+  console.error("LocalLink: Failed to initialize Firestore service", error);
 }
 
 export const dbService = {
