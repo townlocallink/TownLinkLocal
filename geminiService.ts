@@ -28,10 +28,16 @@ CRITICAL:
 
 export const getAgentResponse = async (history: ChatMessage[], location?: { latitude: number, longitude: number }) => {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      throw new Error("API Key missing in environment");
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
     
+    // Using gemini-2.5-flash as it is the only series that supports Google Maps tool
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       contents: history.map(m => ({ 
         role: m.role === 'system' ? 'user' : m.role, 
         parts: m.parts 
@@ -43,7 +49,10 @@ export const getAgentResponse = async (history: ChatMessage[], location?: { lati
         ...(location && {
           toolConfig: {
             retrievalConfig: {
-              latLng: location
+              latLng: {
+                latitude: location.latitude,
+                longitude: location.longitude
+              }
             }
           }
         })
@@ -56,8 +65,9 @@ export const getAgentResponse = async (history: ChatMessage[], location?: { lati
     };
   } catch (error: any) {
     console.error("Gemini Error:", error);
+    const errorMsg = error?.message || "connection error";
     return { 
-      text: "Maaf kijiye bhai, connection mein thodi dikkat aa rahi hai. Kya aap phir se try kar sakte hain?", 
+      text: `Maaf kijiye bhai, AI connect nahi ho paa raha (${errorMsg}). Kya aap phir se try kar sakte hain?`, 
       error: true 
     };
   }
@@ -65,7 +75,10 @@ export const getAgentResponse = async (history: ChatMessage[], location?: { lati
 
 export const generatePromoBanner = async (shopName: string, promotion: string) => {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) return null;
+
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
