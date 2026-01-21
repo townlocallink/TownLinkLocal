@@ -4,7 +4,7 @@ import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { UserProfile, ChatMessage, ProductRequest } from '../types';
 import { getAgentResponse, parseAgentSummary, SYSTEM_INSTRUCTION } from '../geminiService';
 
-// --- Audio Encoding & Decoding Helpers (Manually Implemented) ---
+// --- Audio Encoding & Decoding Helpers ---
 function encode(bytes: Uint8Array) {
   let binary = '';
   const len = bytes.byteLength;
@@ -48,7 +48,6 @@ interface ChatAgentProps {
   onFinalized: (request: ProductRequest) => void;
 }
 
-// Fixed missing React namespace by importing React
 const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     { role: 'model', parts: [{ text: `Namaste ${user.name}! I'm LocalLink Sahayak. Aapko market se kya chahiye?` }] }
@@ -58,7 +57,6 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
   const [isLiveActive, setIsLiveActive] = useState(false);
   const [image, setImage] = useState<string | null>(null);
   const [location, setLocation] = useState<{ latitude: number, longitude: number } | undefined>();
-  const [needsApiKey, setNeedsApiKey] = useState(false);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const liveSessionRef = useRef<any>(null);
@@ -68,7 +66,7 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
 
   useEffect(() => {
-    scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight);
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages]);
 
   useEffect(() => {
@@ -79,18 +77,6 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
       );
     }
   }, []);
-
-  const handleOpenKeySelector = async () => {
-    try {
-      if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
-        await window.aistudio.openSelectKey();
-        setNeedsApiKey(false);
-        // We proceed assuming the key selection was successful
-      }
-    } catch (e) {
-      console.error("Failed to open key selector", e);
-    }
-  };
 
   const stopLiveSession = useCallback(() => {
     if (liveSessionRef.current) {
@@ -123,7 +109,7 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
     
     setMessages(prev => [...prev, { 
       role: 'model', 
-      parts: [{ text: `✅ Samjha! Maine aapka order "${newRequest.category}" category mein shops ko bhej diya hai.` }] 
+      parts: [{ text: `✅ Thik hai! Maine aapka order "${newRequest.category}" category mein shops ko bhej diya hai.` }] 
     }]);
     
     setTimeout(() => {
@@ -134,13 +120,7 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
 
   const startLiveSession = async () => {
     try {
-      const apiKey = process.env.API_KEY;
-      if (!apiKey || apiKey === "undefined") {
-        setNeedsApiKey(true);
-        return;
-      }
-
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
       const inCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       const outCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       inputAudioCtxRef.current = inCtx;
@@ -184,17 +164,12 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
             if (msg.serverContent?.outputTranscription) {
               const text = msg.serverContent.outputTranscription.text;
               const finalized = parseAgentSummary(text);
-              if (finalized?.finalized) {
-                completeFinalization(finalized);
-              }
+              if (finalized?.finalized) completeFinalization(finalized);
             }
           },
           onclose: () => setIsLiveActive(false),
           onerror: (e) => { 
             console.error("Live session error:", e);
-            if (e?.message?.includes("entity was not found") || e?.message?.includes("key")) {
-              setNeedsApiKey(true);
-            }
             stopLiveSession(); 
           }
         },
@@ -230,15 +205,6 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
     const result = await getAgentResponse(newMessages, location);
     setIsLoading(false);
 
-    if (result.text === "AI_KEY_MISSING" || result.text === "AI_KEY_INVALID") {
-      setNeedsApiKey(true);
-      setMessages(prev => [...prev, { 
-        role: 'model', 
-        parts: [{ text: "Bhai, AI brain connect nahi ho raha. Neeche diye button se AI key select kijiye." }] 
-      }]);
-      return;
-    }
-
     const finalizedData = parseAgentSummary(result.text);
     if (finalizedData && finalizedData.finalized) {
       completeFinalization(finalizedData);
@@ -252,33 +218,39 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
   };
 
   return (
-    <>
-      <div className="bg-indigo-700 p-5 text-white flex justify-between items-center shadow-lg">
-        <div className="flex items-center gap-3">
-          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${isLiveActive ? 'bg-white text-red-500 scale-110 shadow-xl' : 'bg-white/20 text-white'}`}>
-            {isLiveActive ? <span className="animate-pulse">🎙️</span> : '🤖'}
+    <div className="flex flex-col h-full bg-white">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 p-5 text-white flex justify-between items-center shadow-md shrink-0">
+        <div className="flex items-center gap-4">
+          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all bg-white shadow-lg ${isLiveActive ? 'text-red-500 animate-pulse' : 'text-indigo-600'}`}>
+            <span className="text-2xl">{isLiveActive ? '🎙️' : '🤖'}</span>
           </div>
           <div>
-            <h3 className="font-black text-lg">LocalLink Sahayak</h3>
-            <p className="text-[10px] font-black uppercase tracking-widest opacity-80">
-              {isLiveActive ? 'Voice Mode Active' : 'AI Shopping Assistant'}
+            <h3 className="font-bold text-lg leading-tight tracking-tight">Sahayak Assistant</h3>
+            <p className="text-[10px] font-bold uppercase tracking-wider opacity-80">
+              {isLiveActive ? 'Voice Conversation Active' : 'Hyperlocal Shopping Expert'}
             </p>
           </div>
         </div>
-        <button onClick={() => { stopLiveSession(); onClose(); }} className="hover:bg-indigo-800 p-2 rounded-full transition">✕</button>
+        <button onClick={onClose} className="hover:bg-black/10 p-2 rounded-full transition-colors">
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50/50">
+      {/* Chat Area */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-5 bg-gray-50/30">
         {messages.map((m, i) => (
           <div key={i} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
-            <div className={`max-w-[85%] rounded-[24px] p-5 shadow-sm border ${
-              m.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none border-indigo-500' : 'bg-white text-gray-800 rounded-tl-none border-gray-100'
+            <div className={`max-w-[85%] rounded-[20px] p-4 shadow-sm border transition-all ${
+              m.role === 'user' 
+                ? 'bg-indigo-600 text-white rounded-tr-none border-indigo-500' 
+                : 'bg-white text-gray-800 rounded-tl-none border-gray-100'
             }`}>
               {m.parts.map((p, pi) => (
                 <div key={pi}>
                   {p.text && <p className="text-sm font-medium leading-relaxed whitespace-pre-wrap">{p.text}</p>}
                   {p.inlineData && (
-                    <img src={`data:${p.inlineData.mimeType};base64,${p.inlineData.data}`} className="mt-3 rounded-2xl max-h-56 w-full object-cover" alt="Context" />
+                    <img src={`data:${p.inlineData.mimeType};base64,${p.inlineData.data}`} className="mt-3 rounded-xl max-h-56 w-full object-cover shadow-sm" alt="Reference" />
                   )}
                 </div>
               ))}
@@ -286,58 +258,44 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
           </div>
         ))}
         
-        {needsApiKey && (
-          <div className="bg-amber-50 border-2 border-amber-200 p-6 rounded-[32px] text-center space-y-4 shadow-xl animate-bounce-in">
-            <span className="text-3xl block">🔑</span>
-            <h4 className="font-black text-amber-900 uppercase text-xs tracking-widest leading-tight">AI Connection Required</h4>
-            <p className="text-[11px] text-amber-700 font-bold leading-relaxed">
-              To use Sahayak, you need to connect your own AI key. 
-              <br/><span className="italic">(Free keys from ai.google.dev work too!)</span>
-            </p>
-            <button 
-              onClick={handleOpenKeySelector}
-              className="w-full bg-amber-500 text-white py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-amber-100 hover:bg-amber-600 transition"
-            >
-              Connect My AI Brain
-            </button>
-            <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="block text-[9px] font-black text-amber-400 uppercase tracking-widest underline">Billing Docs</a>
-          </div>
-        )}
-
         {isLoading && (
           <div className="flex justify-start">
-            <div className="bg-white shadow-sm border border-gray-100 rounded-[24px] rounded-tl-none p-4 flex gap-2">
-              <span className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce"></span>
-              <span className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce delay-100"></span>
-              <span className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce delay-200"></span>
+            <div className="bg-white shadow-sm border border-gray-100 rounded-[20px] rounded-tl-none p-4 flex gap-1.5 items-center">
+              <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce"></span>
+              <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+              <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce [animation-delay:0.4s]"></span>
             </div>
           </div>
         )}
       </div>
 
-      <div className="p-5 bg-white border-t-2 border-gray-100">
-        <div className="flex gap-3">
-          <label className="bg-gray-100 hover:bg-gray-200 w-14 h-14 flex items-center justify-center rounded-2xl cursor-pointer transition active:scale-95 text-xl">
-            📷
-            <input type="file" accept="image/*" className="hidden" onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) {
-                const r = new FileReader();
-                r.onload = (ev) => setImage(ev.target?.result as string);
-                r.readAsDataURL(file);
-              }
-            }} />
-          </label>
-          <button 
-            onClick={isLiveActive ? stopLiveSession : startLiveSession}
-            className={`w-14 h-14 flex items-center justify-center rounded-2xl transition active:scale-95 text-xl shadow-lg ${isLiveActive ? 'bg-red-500 text-white animate-pulse' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
-          >
-            {isLiveActive ? '🛑' : '🎙️'}
-          </button>
+      {/* Input Footer */}
+      <div className="p-4 bg-white border-t border-gray-100 shrink-0">
+        <div className="flex gap-3 items-center">
+          <div className="flex gap-2">
+            <label className="bg-gray-100 hover:bg-gray-200 w-12 h-12 flex items-center justify-center rounded-xl cursor-pointer transition-colors active:scale-95 text-xl">
+              📷
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  const r = new FileReader();
+                  r.onload = (ev) => setImage(ev.target?.result as string);
+                  r.readAsDataURL(file);
+                }
+              }} />
+            </label>
+            <button 
+              onClick={isLiveActive ? stopLiveSession : startLiveSession}
+              className={`w-12 h-12 flex items-center justify-center rounded-xl transition-all active:scale-95 text-xl shadow-md ${isLiveActive ? 'bg-red-500 text-white animate-pulse' : 'bg-indigo-100 text-indigo-600 hover:bg-indigo-200'}`}
+            >
+              {isLiveActive ? '🛑' : '🎙️'}
+            </button>
+          </div>
+          
           <div className="flex-1 relative">
             <input 
-              className="w-full h-14 bg-gray-50 border-2 border-transparent focus:border-indigo-600 focus:bg-white rounded-2xl px-5 py-2 transition outline-none text-sm font-medium shadow-inner"
-              placeholder={isLiveActive ? "Listening..." : "Tell me what you need..."}
+              className="w-full h-12 bg-gray-50 border border-gray-100 focus:border-indigo-600 focus:bg-white rounded-xl px-5 py-2 transition-all outline-none text-sm font-medium shadow-inner"
+              placeholder={isLiveActive ? "Sahayak is listening..." : "Message Sahayak..."}
               value={input}
               disabled={isLiveActive}
               onChange={e => setInput(e.target.value)}
@@ -347,15 +305,22 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
               <button 
                 disabled={isLoading || (!input.trim() && !image)}
                 onClick={handleSend}
-                className="absolute right-2 top-2 h-10 w-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center hover:bg-indigo-700 transition disabled:opacity-30 shadow-lg"
+                className="absolute right-1.5 top-1.5 h-9 w-9 bg-indigo-600 text-white rounded-lg flex items-center justify-center hover:bg-indigo-700 transition-colors disabled:opacity-20 shadow-md"
               >
-                ➤
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 12h14M12 5l7 7-7 7" /></svg>
               </button>
             )}
           </div>
         </div>
+        {image && (
+          <div className="mt-3 flex items-center gap-2 p-2 bg-indigo-50 rounded-lg">
+            <img src={image} className="w-10 h-10 rounded border object-cover" />
+            <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-tight">Image attached</span>
+            <button onClick={() => setImage(null)} className="ml-auto text-indigo-400 p-1 hover:text-red-500">✕</button>
+          </div>
+        )}
       </div>
-    </>
+    </div>
   );
 };
 

@@ -26,19 +26,12 @@ CRITICAL:
 - DO NOT wrap the JSON in markdown code blocks.
 `;
 
-// Updated model to 'gemini-flash-latest' to support Google Maps grounding as per guidelines
 export const getAgentResponse = async (history: ChatMessage[], location?: { latitude: number, longitude: number }) => {
   try {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey || apiKey === "undefined") {
-      return { text: "AI_KEY_MISSING", error: true };
-    }
-
-    // Always create a fresh instance to use the latest injected key
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
     
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3-flash-preview",
       contents: history.map(m => ({ 
         role: m.role === 'system' ? 'user' : m.role, 
         parts: m.parts 
@@ -63,20 +56,16 @@ export const getAgentResponse = async (history: ChatMessage[], location?: { lati
     };
   } catch (error: any) {
     console.error("Gemini Error:", error);
-    // Check for common auth errors
-    if (error?.message?.includes("entity was not found") || error?.message?.includes("API key")) {
-      return { text: "AI_KEY_INVALID", error: true };
-    }
-    return { text: `Sorry bhai, error: ${error?.message || "connection failed"}.` };
+    return { 
+      text: "Maaf kijiye bhai, connection mein thodi dikkat aa rahi hai. Kya aap phir se try kar sakte hain?", 
+      error: true 
+    };
   }
 };
 
 export const generatePromoBanner = async (shopName: string, promotion: string) => {
   try {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey || apiKey === "undefined") return null;
-
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
@@ -104,20 +93,16 @@ export const generatePromoBanner = async (shopName: string, promotion: string) =
 };
 
 export const parseAgentSummary = (text: string) => {
-  if (!text || text === "AI_KEY_MISSING" || text === "AI_KEY_INVALID") return null;
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
       if (parsed.category) {
-        parsed.category = parsed.category.trim();
         const found = CATEGORIES.find(c => c.toLowerCase() === parsed.category.toLowerCase());
         parsed.category = found || "Other";
       }
       return parsed;
     }
-  } catch (e) {
-    return null;
-  }
+  } catch (e) {}
   return null;
 };
