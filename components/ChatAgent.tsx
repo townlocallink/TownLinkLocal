@@ -112,8 +112,8 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
 
   const startLiveSession = async () => {
     try {
-      // Using requested VITE variable name
-      const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
+      // API key must be obtained exclusively from the environment variable process.env.API_KEY
+      const apiKey = process.env.API_KEY;
       if (!apiKey) {
         setMessages(prev => [...prev, { role: 'model', parts: [{ text: "Maaf kijiye, voice assistant abhi upalabdh nahi hai." }] }]);
         return;
@@ -138,6 +138,7 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
               const inputData = e.inputBuffer.getChannelData(0);
               const int16 = new Int16Array(inputData.length);
               for (let i = 0; i < inputData.length; i++) int16[i] = inputData[i] * 32768;
+              // Initiate sendRealtimeInput after session promise resolves to prevent race conditions
               sessionPromise.then(s => s.sendRealtimeInput({
                 media: { data: encode(new Uint8Array(int16.buffer)), mimeType: 'audio/pcm;rate=16000' }
               }));

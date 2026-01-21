@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { ShopProfile, ProductRequest, Offer, Order, DirectMessage, DailyUpdate } from '../types';
 import OfferForm from './OfferForm';
@@ -27,19 +26,19 @@ const ShopOwnerDashboard: React.FC<ShopOwnerDashboardProps> = ({
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [updateText, setUpdateText] = useState('');
   const [updateImage, setUpdateImage] = useState<string | null>(null);
-  
   const [isGeneratingBanner, setIsGeneratingBanner] = useState(false);
   const [promoInput, setPromoInput] = useState('');
 
   const activeChatOffer = offers.find(o => o.id === activeChatOfferId);
 
-  // Normalize category for lead matching
-  const shopCategory = (user.category || "Other").trim().toLowerCase();
-  
+  // Robust filtering: Only match category if it's not "Other" or matches specifically
   const filteredRequests = requests.filter(r => {
     if (r.status !== 'broadcasted') return false;
-    const reqCategory = (r.category || "Other").trim().toLowerCase();
-    return shopCategory === 'other' || reqCategory === shopCategory;
+    
+    const shopCat = (user.category || '').toLowerCase().trim();
+    const reqCat = (r.category || '').toLowerCase().trim();
+    
+    return shopCat === 'other' || reqCat === shopCat;
   });
 
   const handlePostUpdate = () => {
@@ -98,7 +97,6 @@ const ShopOwnerDashboard: React.FC<ShopOwnerDashboardProps> = ({
           <div className="bg-white p-8 rounded-[40px] shadow-2xl max-w-lg w-full">
             <h3 className="text-2xl font-black mb-2 italic">Town Square Update</h3>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-6">Attract local buyers instantly</p>
-            
             <div className="space-y-4">
               <div className="bg-indigo-50 p-6 rounded-3xl border border-indigo-100">
                 <p className="text-[10px] font-black text-indigo-600 uppercase mb-3">AI Storefront Designer</p>
@@ -114,25 +112,22 @@ const ShopOwnerDashboard: React.FC<ShopOwnerDashboardProps> = ({
                     disabled={isGeneratingBanner || !promoInput}
                     className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
                   >
-                    {isGeneratingBanner ? '🖌️ Designing...' : '🎨 Create AI Banner'}
+                    {isGeneratingBanner ? '🖌️ Designing...' : '🎨 AI Banner'}
                   </button>
                 </div>
               </div>
-
               <textarea 
                 className="w-full p-4 bg-gray-50 border-transparent border-2 focus:border-orange-500 rounded-2xl transition outline-none h-24 text-sm"
                 placeholder="What's happening at the shop?"
                 value={updateText}
                 onChange={e => setUpdateText(e.target.value)}
               />
-              
               {updateImage && (
                 <div className="relative group">
                   <img src={updateImage} className="h-48 w-full object-cover rounded-2xl border shadow-sm" />
                   <button onClick={() => setUpdateImage(null)} className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 shadow-lg">✕</button>
                 </div>
               )}
-              
               <div className="flex gap-3 mt-4">
                 <label className="bg-gray-100 p-4 rounded-2xl cursor-pointer text-xl hover:bg-gray-200 transition">
                   📷
@@ -155,45 +150,15 @@ const ShopOwnerDashboard: React.FC<ShopOwnerDashboardProps> = ({
         </div>
       )}
 
-      {activeChatOffer && (
-        <div className="fixed inset-0 z-[120] bg-gray-900/40 backdrop-blur-md flex items-center justify-center p-4">
-          <DirectChat 
-            currentUser={user} 
-            otherPartyName="Local Customer" 
-            history={activeChatOffer.chatHistory || []} 
-            onSendMessage={(text) => onSendMessage(activeChatOffer.id, { senderId: user.id, text, timestamp: Date.now() }, activeChatOffer.requestId)}
-            onClose={() => setActiveChatOfferId(null)} 
-          />
-        </div>
-      )}
-
-      {ratingModal && (
-        <div className="fixed inset-0 z-[130] bg-gray-900/40 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-white p-8 rounded-[40px] shadow-2xl max-w-sm w-full text-center">
-            <h3 className="text-2xl font-black mb-2 italic">Rate Customer</h3>
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-6">How was your interaction?</p>
-            <div className="flex justify-center gap-4 mb-8">
-              {[1, 2, 3, 4, 5].map(star => (
-                <button key={star} onClick={() => {
-                  onSubmitRating(ratingModal.customerId, star, ratingModal.orderId, 'customer');
-                  setRatingModal(null);
-                }} className="text-4xl hover:scale-125 transition grayscale hover:grayscale-0">⭐</button>
-              ))}
-            </div>
-            <button onClick={() => setRatingModal(null)} className="text-xs font-black text-gray-400 uppercase">Dismiss</button>
-          </div>
-        </div>
-      )}
-
       <section>
         <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest mb-6 flex items-center gap-2">
-          <span className="bg-indigo-100 p-1 rounded-lg">📡</span> Nearby Leads
+          <span className="bg-indigo-100 p-1 rounded-lg">📡</span> Nearby Leads ({filteredRequests.length})
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {filteredRequests.length === 0 ? (
             <div className="col-span-full py-20 text-center bg-white border-2 border-dashed border-gray-200 rounded-[32px]">
               <p className="text-gray-400 font-black text-lg uppercase">Scanning for leads...</p>
-              <p className="text-[10px] text-gray-300 mt-2 uppercase font-bold">Try checking other categories later</p>
+              <p className="text-[10px] text-gray-300 mt-2 uppercase font-bold">New requests will appear here automatically</p>
             </div>
           ) : (
             filteredRequests.map(req => {
@@ -223,7 +188,6 @@ const ShopOwnerDashboard: React.FC<ShopOwnerDashboardProps> = ({
                         ) : myOffer.status === 'rejected' ? (
                             <div className="bg-gray-50 p-4 rounded-2xl border text-center">
                                 <p className="text-[10px] font-black text-red-600 uppercase tracking-widest mb-1">Offer Not Accepted</p>
-                                <p className="text-[9px] text-gray-500 uppercase font-bold">The customer accepted a quote from another shop.</p>
                             </div>
                         ) : (
                             <div className="flex gap-2">
@@ -280,13 +244,11 @@ const ShopOwnerDashboard: React.FC<ShopOwnerDashboardProps> = ({
                   }`}>
                     {order.status.replace(/_/g, ' ')}
                   </span>
-                  
                   {order.status === 'pending' && (
                     <button onClick={() => onUpdateOrder(order.id, 'out_for_delivery')} className="bg-gray-900 text-white px-5 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-black transition w-full sm:w-auto shadow-lg shadow-gray-100">
                       Dispatch
                     </button>
                   )}
-                  
                   {order.status === 'delivered' && !order.customerRated && (
                     <button onClick={() => setRatingModal({orderId: order.id, customerId: order.customerId})} className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest w-full sm:w-auto">
                       Rate Customer
@@ -298,6 +260,18 @@ const ShopOwnerDashboard: React.FC<ShopOwnerDashboardProps> = ({
           )}
         </div>
       </section>
+
+      {activeChatOffer && (
+        <div className="fixed inset-0 z-[120] bg-gray-900/40 backdrop-blur-md flex items-center justify-center p-4">
+          <DirectChat 
+            currentUser={user} 
+            otherPartyName="Local Customer" 
+            history={activeChatOffer.chatHistory || []} 
+            onSendMessage={(text) => onSendMessage(activeChatOffer.id, { senderId: user.id, text, timestamp: Date.now() }, activeChatOffer.requestId)}
+            onClose={() => setActiveChatOfferId(null)} 
+          />
+        </div>
+      )}
     </div>
   );
 };

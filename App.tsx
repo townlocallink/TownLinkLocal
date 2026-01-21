@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { UserProfile, ShopProfile, ProductRequest, Offer, Order, DailyUpdate } from './types';
 import Auth from './components/Auth';
@@ -8,7 +7,7 @@ import AdminDashboard from './components/AdminDashboard';
 import Confetti from './components/Confetti';
 import { dbService } from './databaseService';
 
-const SESSION_KEY = 'locallink_v13_active_user'; 
+const SESSION_KEY = 'locallink_v14_active_user'; 
 
 interface Notification {
   id: string;
@@ -28,45 +27,43 @@ const App: React.FC = () => {
   const [showConfetti, setShowConfetti] = useState(false);
   const [globalPopup, setGlobalPopup] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
   const [isCloudActive] = useState(dbService.isCloudActive());
+  const [isInitializing, setIsInitializing] = useState(true);
   
-  const userRef = useRef<UserProfile | ShopProfile | null>(null);
-
-  useEffect(() => {
-    userRef.current = user;
-  }, [user]);
-
   const addNotification = useCallback((text: string, type: Notification['type']) => {
     const n: Notification = { id: Math.random().toString(36).substr(2, 9), text, type, timestamp: Date.now() };
     setNotifications(prev => [n, ...prev].slice(0, 30));
   }, []);
 
   useEffect(() => {
-    const init = async () => {
+    const initApp = async () => {
+      // 1. Restore User
       const savedSession = localStorage.getItem(SESSION_KEY);
-      const allUsers = await dbService.loadUsers();
       if (savedSession) {
         try {
           const parsed = JSON.parse(savedSession);
+          const allUsers = await dbService.loadUsers();
           const liveProfile = allUsers.find((u: any) => u.id === parsed.id);
-          setUser(liveProfile || parsed);
-        } catch (e) {}
+          if (liveProfile) setUser(liveProfile);
+          else setUser(parsed);
+        } catch (e) {
+          console.error("Session restore failed", e);
+        }
       }
 
-      const marketData = await dbService.loadMarketData();
-      setRequests(marketData.requests || []);
-      setOffers(marketData.offers || []);
-      setOrders(marketData.orders || []);
-      setUpdates(marketData.updates || []);
-
-      dbService.listenToMarketData((data) => {
-        setRequests(data.requests);
-        setOffers(data.offers);
-        setOrders(data.orders);
-        setUpdates(data.updates);
+      // 2. Setup Real-time Listener
+      const unsubscribe = dbService.listenToMarketData((data) => {
+        setRequests(data.requests || []);
+        setOffers(data.offers || []);
+        setOrders(data.orders || []);
+        setUpdates(data.updates || []);
+        setIsInitializing(false);
       });
+
+      return () => unsubscribe();
     };
-    init();
-  }, [addNotification]);
+    
+    initApp();
+  }, []);
 
   const handleLogin = (u: UserProfile | ShopProfile) => {
     setUser(u);
@@ -85,23 +82,33 @@ const App: React.FC = () => {
       const updatedTotal = (userToUpdate.totalRatings || 0) + 1;
       const updatedRating = Number((((userToUpdate.rating * (updatedTotal - 1)) + r) / updatedTotal).toFixed(1));
       await dbService.updateUserProfile(tid, { rating: updatedRating, totalRatings: updatedTotal });
-      const nOrd = orders.map(o => o.id === oid ? (type === 'shop' ? { ...o, shopRated: true } : { ...o, customerRated: true }) : o);
-      setOrders(nOrd);
-      const targetOrd = nOrd.find(o => o.id === oid);
-      if (targetOrd) await dbService.saveItem(oid, 'order', targetOrd);
+      
+      const targetOrd = orders.find(o => o.id === oid);
+      if (targetOrd) {
+        const updatedOrder = type === 'shop' ? { ...targetOrd, shopRated: true } : { ...targetOrd, customerRated: true };
+        await dbService.saveItem(oid, 'order', updatedOrder);
+      }
       addNotification(`Review submitted!`, 'system');
     }
   };
 
   const handleUpdateOrder = async (orderId: string, status: Order['status']) => {
-    const nOrd = orders.map(o => o.id === orderId ? { ...o, status } : o);
-    setOrders(nOrd);
-    const targetOrder = nOrd.find(o => o.id === orderId);
+    const targetOrder = orders.find(o => o.id === orderId);
     if (targetOrder) {
-      await dbService.saveItem(orderId, 'order', targetOrder);
+      const updatedOrder = { ...targetOrder, status };
+      await dbService.saveItem(orderId, 'order', updatedOrder);
       addNotification("Order status updated!", 'order');
     }
   };
+
+  if (isInitializing && user) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
+        <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="text-indigo-600 font-black uppercase tracking-widest text-xs">Syncing Town Data...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-4 md:p-8">
@@ -129,7 +136,7 @@ const App: React.FC = () => {
                    <div className="flex items-center gap-1.5 mt-1">
                       <div className={`w-1.5 h-1.5 rounded-full ${isCloudActive ? 'bg-green-500 animate-pulse' : 'bg-amber-400'}`}></div>
                       <span className="text-[8px] font-black uppercase tracking-widest text-gray-400">
-                        {isCloudActive ? 'Cloud Active' : 'Local Mode'}
+                        {isCloudActive ? 'Cloud Sync Active' : 'Offline Mode'}
                       </span>
                    </div>
                 </div>
@@ -146,7 +153,6 @@ const App: React.FC = () => {
             {user.role === 'admin' ? (
               <AdminDashboard requests={requests} offers={offers} orders={orders} allUsers={[]} onImportData={(data) => {
                 dbService.saveUsers(data.users || []);
-                setRequests(data.requests || []); setOffers(data.offers || []); setOrders(data.orders || []);
               }} />
             ) : user.role === 'customer' ? (
               <CustomerDashboard 
@@ -156,21 +162,24 @@ const App: React.FC = () => {
                 orders={orders.filter(o => o.customerId === user.id)}
                 updates={updates}
                 onNewRequest={async (req) => { 
-                  setRequests(prev => [req, ...prev]); 
                   await dbService.saveItem(req.id, 'request', req);
-                  addNotification("Broadcasting request...", "system"); 
+                  addNotification("Request broadcasted!", "system"); 
                 }}
                 onAcceptOffer={async (order) => {
-                  const nReq = requests.map(r => r.id === order.requestId ? { ...r, status: 'fulfilled' as const } : r);
-                  const nOff = offers.map(o => o.requestId === order.requestId ? (o.id === order.offerId ? { ...o, status: 'accepted' as const } : { ...o, status: 'rejected' as const }) : o);
+                  const reqToUpdate = requests.find(r => r.id === order.requestId);
+                  if (reqToUpdate) {
+                    await dbService.saveItem(reqToUpdate.id, 'request', { ...reqToUpdate, status: 'fulfilled' });
+                  }
+                  
+                  const otherOffers = offers.filter(o => o.requestId === order.requestId);
+                  for (const o of otherOffers) {
+                    await dbService.saveItem(o.id, 'offer', { ...o, status: o.id === order.offerId ? 'accepted' : 'rejected' });
+                  }
+
                   await dbService.saveItem(order.id, 'order', order);
-                  const updatedReq = nReq.find(r => r.id === order.requestId);
-                  if (updatedReq) await dbService.saveItem(updatedReq.id, 'request', updatedReq);
-                  for (const o of nOff) { if (o.requestId === order.requestId) await dbService.saveItem(o.id, 'offer', o); }
-                  setRequests(nReq); setOffers(nOff); setOrders(prev => [order, ...prev]);
                   setShowConfetti(true);
                   setTimeout(() => setShowConfetti(false), 5000);
-                  addNotification("Order placed!", 'order');
+                  addNotification("Order confirmed!", 'order');
                 }}
                 onUpdateUser={(u) => { setUser(u); localStorage.setItem(SESSION_KEY, JSON.stringify(u)); dbService.saveUsers([u]); }}
                 onSendMessage={async (id, msg) => { 
@@ -181,26 +190,23 @@ const App: React.FC = () => {
                   }
                 }}
                 onMarkReceived={async (id) => { 
-                  const nOrd = orders.map(o => o.id === id ? { ...o, status: 'delivered' as const } : o);
-                  const target = nOrd.find(o => o.id === id);
-                  if (target) await dbService.saveItem(id, 'order', target);
+                  const target = orders.find(o => o.id === id);
+                  if (target) await dbService.saveItem(id, 'order', { ...target, status: 'delivered' });
                 }}
                 onSubmitRating={submitRating}
               />
             ) : (
               <ShopOwnerDashboard 
                 user={user as ShopProfile}
-                requests={requests.filter(r => r.status === 'broadcasted' && (r.category.toLowerCase() === (user as ShopProfile).category.toLowerCase() || (user as ShopProfile).category === 'Other'))}
+                requests={requests}
                 totalGlobalRequests={requests.length}
                 offers={offers.filter(o => o.shopId === user.id)}
                 orders={orders.filter(o => o.shopId === user.id)}
                 onPostUpdate={async (upd) => {
-                  setUpdates(prev => [upd, ...prev]);
                   await dbService.saveItem(upd.id, 'update', upd);
-                  addNotification("Town Square updated!", "system");
+                  addNotification("Store updated!", "system");
                 }}
                 onSubmitOffer={async (off) => { 
-                  setOffers(prev => [off, ...prev]); 
                   await dbService.saveItem(off.id, 'offer', off);
                   addNotification("Quote sent!", "offer"); 
                 }}

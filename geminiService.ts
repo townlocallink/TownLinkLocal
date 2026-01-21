@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { ChatMessage } from "./types";
 
@@ -24,7 +25,8 @@ CRITICAL:
 
 export const getAgentResponse = async (history: ChatMessage[]) => {
   try {
-    const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
+    // API key must be obtained exclusively from the environment variable process.env.API_KEY
+    const apiKey = process.env.API_KEY;
 
     if (!apiKey) {
       return { 
@@ -87,7 +89,8 @@ export const parseAgentSummary = (text: string) => {
 
 export const generatePromoBanner = async (shopName: string, promotion: string) => {
   try {
-    const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
+    // API key must be obtained exclusively from the environment variable process.env.API_KEY
+    const apiKey = process.env.API_KEY;
     if (!apiKey) return null;
 
     const ai = new GoogleGenAI({ apiKey });
@@ -102,7 +105,8 @@ export const generatePromoBanner = async (shopName: string, promotion: string) =
     if (candidate) {
       for (const part of candidate.content.parts) {
         if (part.inlineData) {
-          return `data:image/png;base64,${part.inlineData.data}`;
+          const base64EncodeString: string = part.inlineData.data;
+          return `data:image/png;base64,${base64EncodeString}`;
         }
       }
     }

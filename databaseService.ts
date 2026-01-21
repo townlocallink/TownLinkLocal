@@ -1,4 +1,3 @@
-
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
   getFirestore, 
@@ -8,13 +7,13 @@ import {
   getDocs, 
   onSnapshot, 
   query, 
-  orderBy,
-  limit,
-  Firestore
+  orderBy, 
+  limit, 
+  Firestore,
+  updateDoc
 } from 'firebase/firestore';
 import { UserProfile, ShopProfile, ProductRequest, Offer, Order, DailyUpdate } from './types';
 
-// Hardcoded Firebase configuration from your project
 const firebaseConfig = {
   apiKey: "AIzaSyDiEH7WGW6plRI0oAzPQkPMQpTSHfpaXMQ",
   authDomain: "locallink-town.firebaseapp.com",
@@ -25,18 +24,18 @@ const firebaseConfig = {
   measurementId: "G-C3LCEMNQP5"
 };
 
-let db: Firestore | null = null;
+let dbInstance: Firestore | null = null;
 let cloudActive = false;
 
 const getDb = (): Firestore | null => {
-  if (db) return db;
+  if (dbInstance) return dbInstance;
   try {
     const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-    db = getFirestore(app);
+    dbInstance = getFirestore(app);
     cloudActive = true;
-    return db;
+    return dbInstance;
   } catch (e) {
-    console.warn("LocalLink: Database connection failed.", e);
+    console.error("LocalLink Firebase Init Failed:", e);
     return null;
   }
 };
@@ -58,34 +57,10 @@ export const dbService = {
     }
   },
 
-  loadMarketData: async () => {
-    const firestore = getDb();
-    if (!firestore) return { requests: [], offers: [], orders: [], updates: [] };
-    try {
-      const [reqs, offs, ords, upds] = await Promise.all([
-        getDocs(collection(firestore, "requests")),
-        getDocs(collection(firestore, "offers")),
-        getDocs(collection(firestore, "orders")),
-        getDocs(query(collection(firestore, "updates"), orderBy("createdAt", "desc"), limit(50)))
-      ]);
-
-      return {
-        requests: reqs.docs.map(d => d.data() as ProductRequest),
-        offers: offs.docs.map(d => d.data() as Offer),
-        orders: ords.docs.map(d => d.data() as Order),
-        updates: upds.docs.map(d => d.data() as DailyUpdate).filter(u => u.expiresAt > Date.now())
-      };
-    } catch (e) {
-      console.error("Load Market Data Error:", e);
-      return { requests: [], offers: [], orders: [], updates: [] };
-    }
-  },
-
   listenToMarketData: (callback: (data: any) => void) => {
     const firestore = getDb();
     if (!firestore) return () => {};
 
-    // Initial state object
     const currentData = {
       requests: [] as ProductRequest[],
       offers: [] as Offer[],
