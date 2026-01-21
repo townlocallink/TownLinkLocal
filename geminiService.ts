@@ -25,21 +25,19 @@ CRITICAL:
 
 export const getAgentResponse = async (history: ChatMessage[]) => {
   try {
-    // Attempt to get the key from process.env (Vercel injected)
-    const apiKey = process.env.API_KEY;
-    
-    if (!apiKey) {
-      console.error("LocalLink: API_KEY not found in environment.");
+    // Check key presence silently
+    if (!process.env.API_KEY) {
+      console.error("LocalLink: API_KEY missing from environment variables.");
       return { 
-        text: "⚠️ Environment Sync Error: The app cannot see your API_KEY. Please go to Vercel -> Deployments and click 'Redeploy' on your latest build to sync environment variables.", 
+        text: "⚠️ Configuration Error: The API Key is not synced. Please Redeploy your app in Vercel to apply the new settings.", 
         error: true 
       };
     }
 
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    // Ensure history follows User -> Model pattern
-    const turnHistory = history
+    // Process history: Remove system role and ensure user-model-user alternating pattern
+    const contents = history
       .filter(m => m.role !== 'system')
       .map(m => ({
         role: m.role,
@@ -51,16 +49,17 @@ export const getAgentResponse = async (history: ChatMessage[]) => {
         })
       }));
 
-    if (turnHistory.length > 0 && turnHistory[0].role === 'model') {
-      turnHistory.unshift({
+    // Requirement: Chat history must start with a user message
+    if (contents.length > 0 && contents[0].role === 'model') {
+      contents.unshift({
         role: 'user',
-        parts: [{ text: "Hi Sahayak, I need to buy something from the market." }]
+        parts: [{ text: "Hello Sahayak, I need some help buying things." }]
       });
     }
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: turnHistory,
+      contents: contents,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         temperature: 0.7,
@@ -73,13 +72,13 @@ export const getAgentResponse = async (history: ChatMessage[]) => {
   } catch (error: any) {
     console.error("Gemini Critical Error:", error);
     
-    let userMsg = "Connection thoda weak hai. Ek baar phir try karein?";
-    const errStr = error?.toString() || "";
+    let userMsg = "Thoda connection problem hai. Phir se koshish karein?";
+    const errText = error?.toString() || "";
     
-    if (errStr.includes("402") || errStr.includes("quota") || errStr.includes("billing")) {
-      userMsg = "⚠️ Billing required: Please check your Google AI Studio billing status.";
-    } else if (errStr.includes("403") || errStr.includes("API key not valid")) {
-      userMsg = "⚠️ Invalid API Key: Please check the key in your Vercel Environment Variables.";
+    if (errText.includes("402") || errText.includes("quota")) {
+      userMsg = "⚠️ Limit reached: Please check billing on Google AI Studio.";
+    } else if (errText.includes("403")) {
+      userMsg = "⚠️ Access Denied: Please check if the API Key in Vercel is correct and active.";
     }
 
     return { text: userMsg, error: true };
@@ -103,10 +102,8 @@ export const parseAgentSummary = (text: string) => {
 
 export const generatePromoBanner = async (shopName: string, promotion: string) => {
   try {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) return null;
-    
-    const ai = new GoogleGenAI({ apiKey });
+    if (!process.env.API_KEY) return null;
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
