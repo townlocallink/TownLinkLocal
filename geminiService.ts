@@ -2,8 +2,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { ChatMessage } from "./types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 export const CATEGORIES = [
   "Sports", "Grocery", "Electronics", "Pharmacy", 
   "Fashion & Apparel", "Food & Bakery", "Books & Stationery", 
@@ -28,10 +26,29 @@ CRITICAL:
 - DO NOT wrap the JSON in markdown code blocks.
 `;
 
+const getAIClient = () => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey || apiKey === "undefined" || apiKey.length < 5) {
+    console.warn("LocalLink: process.env.API_KEY is missing or too short.");
+    return null;
+  }
+  try {
+    return new GoogleGenAI({ apiKey });
+  } catch (err) {
+    console.error("LocalLink: Error initializing Gemini AI client", err);
+    return null;
+  }
+};
+
 export const getAgentResponse = async (history: ChatMessage[], location?: { latitude: number, longitude: number }) => {
   try {
+    const ai = getAIClient();
+    if (!ai) {
+      return { text: "Bhai, I can't connect to my AI brain right now. Check if the API key is set in Vercel!" };
+    }
+
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       contents: history.map(m => ({ 
         role: m.role === 'system' ? 'user' : m.role, 
         parts: m.parts 
@@ -51,17 +68,20 @@ export const getAgentResponse = async (history: ChatMessage[], location?: { lati
     });
 
     return {
-      text: response.text,
+      text: response.text || "I'm thinking... but nothing came out. Try again?",
       groundingChunks: response.candidates?.[0]?.groundingMetadata?.groundingChunks
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini Error:", error);
-    return { text: "I'm having a bit of trouble connecting. Please try again, bhai!" };
+    return { text: `Sorry bhai, error: ${error?.message || "connection failed"}.` };
   }
 };
 
 export const generatePromoBanner = async (shopName: string, promotion: string) => {
   try {
+    const ai = getAIClient();
+    if (!ai) return null;
+
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
@@ -73,11 +93,15 @@ export const generatePromoBanner = async (shopName: string, promotion: string) =
       },
     });
     
-    for (const part of response.candidates[0].content.parts) {
-      if (part.inlineData) {
-        return `data:image/png;base64,${part.inlineData.data}`;
+    const candidate = response.candidates?.[0];
+    if (candidate) {
+      for (const part of candidate.content.parts) {
+        if (part.inlineData) {
+          return `data:image/png;base64,${part.inlineData.data}`;
+        }
       }
     }
+    return null;
   } catch (e) {
     console.error("Banner generation failed", e);
     return null;
@@ -85,6 +109,7 @@ export const generatePromoBanner = async (shopName: string, promotion: string) =
 };
 
 export const parseAgentSummary = (text: string) => {
+  if (!text) return null;
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
