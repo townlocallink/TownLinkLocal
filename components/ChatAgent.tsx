@@ -56,7 +56,6 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
   const [isLoading, setIsLoading] = useState(false);
   const [isLiveActive, setIsLiveActive] = useState(false);
   const [image, setImage] = useState<string | null>(null);
-  const [location, setLocation] = useState<{ latitude: number, longitude: number } | undefined>();
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const liveSessionRef = useRef<any>(null);
@@ -68,15 +67,6 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages]);
-
-  useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => setLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
-        () => console.warn("Location permission denied")
-      );
-    }
-  }, []);
 
   const stopLiveSession = useCallback(() => {
     if (liveSessionRef.current) {
@@ -109,7 +99,7 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
     
     setMessages(prev => [...prev, { 
       role: 'model', 
-      parts: [{ text: `✅ Thik hai! Maine aapka order "${newRequest.category}" category mein shops ko bhej diya hai.` }] 
+      parts: [{ text: `✅ Samjha! Maine aapka order "${newRequest.category}" category mein shops ko bhej diya hai.` }] 
     }]);
     
     setTimeout(() => {
@@ -120,7 +110,8 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
 
   const startLiveSession = async () => {
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+      const apiKey = process.env.API_KEY || '';
+      const ai = new GoogleGenAI({ apiKey });
       const inCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       const outCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       inputAudioCtxRef.current = inCtx;
@@ -202,7 +193,7 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
     setImage(null);
     setIsLoading(true);
 
-    const result = await getAgentResponse(newMessages, location);
+    const result = await getAgentResponse(newMessages);
     setIsLoading(false);
 
     const finalizedData = parseAgentSummary(result.text);
@@ -211,8 +202,7 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
     } else {
       setMessages(prev => [...prev, { 
         role: 'model', 
-        parts: [{ text: result.text }],
-        groundingChunks: result.groundingChunks 
+        parts: [{ text: result.text }] 
       }]);
     }
   };
@@ -220,20 +210,20 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
   return (
     <div className="flex flex-col h-full bg-white">
       {/* Header */}
-      <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 p-5 text-white flex justify-between items-center shadow-md shrink-0">
-        <div className="flex items-center gap-4">
+      <div className="bg-indigo-600 p-5 text-white flex justify-between items-center shadow-md shrink-0">
+        <div className="flex items-center gap-3">
           <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all bg-white shadow-lg ${isLiveActive ? 'text-red-500 animate-pulse' : 'text-indigo-600'}`}>
             <span className="text-2xl">{isLiveActive ? '🎙️' : '🤖'}</span>
           </div>
           <div>
             <h3 className="font-bold text-lg leading-tight tracking-tight">Sahayak Assistant</h3>
             <p className="text-[10px] font-bold uppercase tracking-wider opacity-80">
-              {isLiveActive ? 'Voice Conversation Active' : 'Hyperlocal Shopping Expert'}
+              {isLiveActive ? 'Live Voice Active' : 'Hyperlocal Shopping Expert'}
             </p>
           </div>
         </div>
         <button onClick={onClose} className="hover:bg-black/10 p-2 rounded-full transition-colors">
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
       </div>
 

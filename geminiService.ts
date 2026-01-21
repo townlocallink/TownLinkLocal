@@ -9,35 +9,26 @@ export const CATEGORIES = [
 ];
 
 export const SYSTEM_INSTRUCTION = `
-You are "LocalLink Sahayak", an expert Local Shopping Assistant for a hyperlocal marketplace in Tier 2-4 Indian towns.
-Your goal is to help customers clarify exactly what they want to buy from local shops.
+You are "LocalLink Sahayak", a helpful Local Shopping Assistant for Indian Tier 2-4 towns.
+Help customers clarify what they want to buy.
 
-1. START: Be extremely friendly. Use a warm, helpful "shopkeeper" tone. Use greetings like "Namaste" or "Ram Ram".
-2. CLARIFY: Ask relevant questions (size, brand preference, quantity, weight). Only ask 1-2 questions at a time.
-3. LANDMARKS: If the user mentions local landmarks (e.g., "near the clock tower"), acknowledge them.
-4. LOCAL DISCOVERY: If no registered shop is mentioned, you can use Google Maps to find real-world shops nearby to help the user.
-5. LANGUAGE: Analyze user's language. Use English, Hindi, or Hinglish as they prefer.
-6. SUMMARIZE: Once clear, summarize: "Thik hai, aapko 1kg Tata Tea Gold chahiye jo Clock Tower ke pass mile. Kya main ye shops ko bhej doon? (Yes/No)".
-7. CATEGORIZE: Use one of these: ${CATEGORIES.join(", ")}.
+1. TONE: Warm, friendly, like a local shopkeeper. Use "Namaste" or "Ram Ram".
+2. CLARIFY: Ask 1-2 quick questions about size, brand, or quantity.
+3. LANGUAGE: Use English, Hindi, or Hinglish based on user preference.
+4. SUMMARIZE: Once clear, summarize: "Thik hai, aapko [item] chahiye. Kya main ye shops ko bhej doon? (Yes/No)".
+5. CATEGORIZE: Use: ${CATEGORIES.join(", ")}.
 
 CRITICAL:
-- If the user says "Yes" to the summary, output a final JSON block: {"finalized": true, "summary": "Detailed summary here", "category": "EXACT_CATEGORY"}.
-- If you are in VOICE mode (Live API), your summary must be spoken clearly before the JSON is sent.
-- DO NOT wrap the JSON in markdown code blocks.
+- If user says "Yes" to summary, output JSON: {"finalized": true, "summary": "Full summary", "category": "EXACT_CATEGORY"}.
+- Do NOT use markdown code blocks for JSON.
 `;
 
-export const getAgentResponse = async (history: ChatMessage[], location?: { latitude: number, longitude: number }) => {
+export const getAgentResponse = async (history: ChatMessage[]) => {
   try {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) {
-      throw new Error("API Key missing in environment");
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
     
-    // Using gemini-2.5-flash as it is the only series that supports Google Maps tool
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       contents: history.map(m => ({ 
         role: m.role === 'system' ? 'user' : m.role, 
         parts: m.parts 
@@ -45,29 +36,16 @@ export const getAgentResponse = async (history: ChatMessage[], location?: { lati
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         temperature: 0.7,
-        tools: [{ googleMaps: {} }],
-        ...(location && {
-          toolConfig: {
-            retrievalConfig: {
-              latLng: {
-                latitude: location.latitude,
-                longitude: location.longitude
-              }
-            }
-          }
-        })
       },
     });
 
     return {
-      text: response.text || "I'm thinking... but nothing came out. Try again?",
-      groundingChunks: response.candidates?.[0]?.groundingMetadata?.groundingChunks
+      text: response.text || "I'm listening... tell me more?",
     };
   } catch (error: any) {
     console.error("Gemini Error:", error);
-    const errorMsg = error?.message || "connection error";
     return { 
-      text: `Maaf kijiye bhai, AI connect nahi ho paa raha (${errorMsg}). Kya aap phir se try kar sakte hain?`, 
+      text: "Connection thoda weak hai. Ek baar phir try karein?", 
       error: true 
     };
   }
@@ -75,16 +53,13 @@ export const getAgentResponse = async (history: ChatMessage[], location?: { lati
 
 export const generatePromoBanner = async (shopName: string, promotion: string) => {
   try {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) return null;
-
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
         parts: [
           {
-            text: `Create a high-quality professional storefront banner for a shop named "${shopName}". The banner should promote: "${promotion}". Style: Modern Indian retail, vibrant colors, clean typography, welcoming atmosphere.`,
+            text: `Professional storefront banner for "${shopName}" promoting "${promotion}". Vibrant Indian retail style.`,
           },
         ],
       },
@@ -100,7 +75,6 @@ export const generatePromoBanner = async (shopName: string, promotion: string) =
     }
     return null;
   } catch (e) {
-    console.error("Banner generation failed", e);
     return null;
   }
 };
