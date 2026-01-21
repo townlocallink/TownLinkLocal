@@ -1,4 +1,4 @@
-
+// Add missing React import
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { UserProfile, ChatMessage, ProductRequest } from '../types';
@@ -112,8 +112,7 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
 
   const startLiveSession = async () => {
     try {
-      const apiKey = process.env.API_KEY || '';
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
       const inCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       const outCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       inputAudioCtxRef.current = inCtx;
@@ -197,6 +196,14 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
 
     const result = await getAgentResponse(newMessages);
     setIsLoading(false);
+
+    if (result.error) {
+      setMessages(prev => [...prev, { 
+        role: 'model', 
+        parts: [{ text: result.text }] 
+      }]);
+      return;
+    }
 
     const finalizedData = parseAgentSummary(result.text);
     if (finalizedData && finalizedData.finalized) {
