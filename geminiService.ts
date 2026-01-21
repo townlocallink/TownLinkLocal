@@ -26,29 +26,19 @@ CRITICAL:
 - DO NOT wrap the JSON in markdown code blocks.
 `;
 
-const getAIClient = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey || apiKey === "undefined" || apiKey.length < 5) {
-    console.warn("LocalLink: process.env.API_KEY is missing or too short.");
-    return null;
-  }
-  try {
-    return new GoogleGenAI({ apiKey });
-  } catch (err) {
-    console.error("LocalLink: Error initializing Gemini AI client", err);
-    return null;
-  }
-};
-
+// Updated model to 'gemini-flash-latest' to support Google Maps grounding as per guidelines
 export const getAgentResponse = async (history: ChatMessage[], location?: { latitude: number, longitude: number }) => {
   try {
-    const ai = getAIClient();
-    if (!ai) {
-      return { text: "Bhai, I can't connect to my AI brain right now. Check if the API key is set in Vercel!" };
+    const apiKey = process.env.API_KEY;
+    if (!apiKey || apiKey === "undefined") {
+      return { text: "AI_KEY_MISSING", error: true };
     }
 
+    // Always create a fresh instance to use the latest injected key
+    const ai = new GoogleGenAI({ apiKey });
+    
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-flash-latest",
       contents: history.map(m => ({ 
         role: m.role === 'system' ? 'user' : m.role, 
         parts: m.parts 
@@ -73,15 +63,20 @@ export const getAgentResponse = async (history: ChatMessage[], location?: { lati
     };
   } catch (error: any) {
     console.error("Gemini Error:", error);
+    // Check for common auth errors
+    if (error?.message?.includes("entity was not found") || error?.message?.includes("API key")) {
+      return { text: "AI_KEY_INVALID", error: true };
+    }
     return { text: `Sorry bhai, error: ${error?.message || "connection failed"}.` };
   }
 };
 
 export const generatePromoBanner = async (shopName: string, promotion: string) => {
   try {
-    const ai = getAIClient();
-    if (!ai) return null;
+    const apiKey = process.env.API_KEY;
+    if (!apiKey || apiKey === "undefined") return null;
 
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
@@ -109,7 +104,7 @@ export const generatePromoBanner = async (shopName: string, promotion: string) =
 };
 
 export const parseAgentSummary = (text: string) => {
-  if (!text) return null;
+  if (!text || text === "AI_KEY_MISSING" || text === "AI_KEY_INVALID") return null;
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {

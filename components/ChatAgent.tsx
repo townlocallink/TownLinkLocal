@@ -1,10 +1,10 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
-import { UserProfile, ChatMessage, ProductRequest, GroundingChunk } from '../types';
+import { UserProfile, ChatMessage, ProductRequest } from '../types';
 import { getAgentResponse, parseAgentSummary, SYSTEM_INSTRUCTION } from '../geminiService';
 
-// --- Audio Encoding & Decoding Helpers ---
+// --- Audio Encoding & Decoding Helpers (Manually Implemented) ---
 function encode(bytes: Uint8Array) {
   let binary = '';
   const len = bytes.byteLength;
@@ -48,6 +48,7 @@ interface ChatAgentProps {
   onFinalized: (request: ProductRequest) => void;
 }
 
+// Fixed missing React namespace by importing React
 const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     { role: 'model', parts: [{ text: `Namaste ${user.name}! I'm LocalLink Sahayak. Aapko market se kya chahiye?` }] }
@@ -57,6 +58,7 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
   const [isLiveActive, setIsLiveActive] = useState(false);
   const [image, setImage] = useState<string | null>(null);
   const [location, setLocation] = useState<{ latitude: number, longitude: number } | undefined>();
+  const [needsApiKey, setNeedsApiKey] = useState(false);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const liveSessionRef = useRef<any>(null);
@@ -78,9 +80,21 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
     }
   }, []);
 
+  const handleOpenKeySelector = async () => {
+    try {
+      if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
+        await window.aistudio.openSelectKey();
+        setNeedsApiKey(false);
+        // We proceed assuming the key selection was successful
+      }
+    } catch (e) {
+      console.error("Failed to open key selector", e);
+    }
+  };
+
   const stopLiveSession = useCallback(() => {
     if (liveSessionRef.current) {
-      liveSessionRef.current.close();
+      try { liveSessionRef.current.close(); } catch (e) {}
       liveSessionRef.current = null;
     }
     for (const source of sourcesRef.current) {
@@ -120,7 +134,13 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
 
   const startLiveSession = async () => {
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const apiKey = process.env.API_KEY;
+      if (!apiKey || apiKey === "undefined") {
+        setNeedsApiKey(true);
+        return;
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
       const inCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       const outCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       inputAudioCtxRef.current = inCtx;
@@ -170,7 +190,13 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
             }
           },
           onclose: () => setIsLiveActive(false),
-          onerror: (e) => { console.error(e); stopLiveSession(); }
+          onerror: (e) => { 
+            console.error("Live session error:", e);
+            if (e?.message?.includes("entity was not found") || e?.message?.includes("key")) {
+              setNeedsApiKey(true);
+            }
+            stopLiveSession(); 
+          }
         },
         config: {
           responseModalities: [Modality.AUDIO],
@@ -203,6 +229,15 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
 
     const result = await getAgentResponse(newMessages, location);
     setIsLoading(false);
+
+    if (result.text === "AI_KEY_MISSING" || result.text === "AI_KEY_INVALID") {
+      setNeedsApiKey(true);
+      setMessages(prev => [...prev, { 
+        role: 'model', 
+        parts: [{ text: "Bhai, AI brain connect nahi ho raha. Neeche diye button se AI key select kijiye." }] 
+      }]);
+      return;
+    }
 
     const finalizedData = parseAgentSummary(result.text);
     if (finalizedData && finalizedData.finalized) {
@@ -248,28 +283,27 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
                 </div>
               ))}
             </div>
-            
-            {m.groundingChunks && m.groundingChunks.length > 0 && (
-              <div className="mt-3 w-full max-w-[85%] space-y-2">
-                <p className="text-[9px] font-black uppercase text-indigo-600 tracking-widest ml-2">Found on Maps:</p>
-                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-                  {m.groundingChunks.map((chunk, ci) => chunk.maps && (
-                    <a 
-                      key={ci} 
-                      href={chunk.maps.uri} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="shrink-0 bg-white border border-indigo-100 p-3 rounded-xl flex items-center gap-2 hover:bg-indigo-50 transition shadow-sm"
-                    >
-                      <span className="text-lg">📍</span>
-                      <span className="text-xs font-bold text-gray-700 truncate max-w-[120px]">{chunk.maps.title}</span>
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         ))}
+        
+        {needsApiKey && (
+          <div className="bg-amber-50 border-2 border-amber-200 p-6 rounded-[32px] text-center space-y-4 shadow-xl animate-bounce-in">
+            <span className="text-3xl block">🔑</span>
+            <h4 className="font-black text-amber-900 uppercase text-xs tracking-widest leading-tight">AI Connection Required</h4>
+            <p className="text-[11px] text-amber-700 font-bold leading-relaxed">
+              To use Sahayak, you need to connect your own AI key. 
+              <br/><span className="italic">(Free keys from ai.google.dev work too!)</span>
+            </p>
+            <button 
+              onClick={handleOpenKeySelector}
+              className="w-full bg-amber-500 text-white py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-amber-100 hover:bg-amber-600 transition"
+            >
+              Connect My AI Brain
+            </button>
+            <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="block text-[9px] font-black text-amber-400 uppercase tracking-widest underline">Billing Docs</a>
+          </div>
+        )}
+
         {isLoading && (
           <div className="flex justify-start">
             <div className="bg-white shadow-sm border border-gray-100 rounded-[24px] rounded-tl-none p-4 flex gap-2">
@@ -279,26 +313,9 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
             </div>
           </div>
         )}
-        {isLiveActive && (
-          <div className="flex flex-col items-center justify-center gap-4 py-12 bg-indigo-50/50 rounded-[40px] border-2 border-dashed border-indigo-200">
-             <div className="flex gap-1 items-end h-10">
-                {[...Array(6)].map((_, i) => (
-                  <div key={i} className="w-1.5 bg-indigo-600 rounded-full animate-voice-bar" style={{ animationDelay: `${i * 0.1}s` }}></div>
-                ))}
-             </div>
-             <p className="text-[10px] font-black uppercase text-indigo-600 tracking-[0.2em] animate-pulse">Talking to Sahayak...</p>
-             <button onClick={stopLiveSession} className="bg-red-500 text-white px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl">Stop Voice</button>
-          </div>
-        )}
       </div>
 
       <div className="p-5 bg-white border-t-2 border-gray-100">
-        {image && (
-          <div className="mb-4 relative inline-block group">
-            <img src={image} className="h-24 w-24 object-cover rounded-2xl border-2 border-indigo-100 shadow-lg" />
-            <button onClick={() => setImage(null)} className="absolute -top-3 -right-3 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-xl">✕</button>
-          </div>
-        )}
         <div className="flex gap-3">
           <label className="bg-gray-100 hover:bg-gray-200 w-14 h-14 flex items-center justify-center rounded-2xl cursor-pointer transition active:scale-95 text-xl">
             📷
@@ -337,12 +354,7 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
             )}
           </div>
         </div>
-        <p className="text-[9px] text-gray-400 font-black uppercase text-center mt-3 tracking-widest">Sahayak understands Hindi, English & Hinglish</p>
       </div>
-      <style>{`
-        @keyframes voice-bar { 0%, 100% { height: 30%; } 50% { height: 100%; } }
-        .animate-voice-bar { animation: voice-bar 0.6s infinite ease-in-out; }
-      `}</style>
     </>
   );
 };
