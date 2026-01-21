@@ -24,14 +24,9 @@ CRITICAL:
 `;
 
 export const getAgentResponse = async (history: ChatMessage[]) => {
-  const apiKey = process.env.API_KEY;
-  
-  if (!apiKey) {
-    return { text: "⚠️ SYSTEM: API_KEY is empty. Please check your Vercel Environment Variables.", error: true };
-  }
-
   try {
-    const ai = new GoogleGenAI({ apiKey });
+    // Initialize inside the function to ensure we use the injected API_KEY
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
     
     const contents = history
       .filter(m => m.role !== 'system')
@@ -45,9 +40,8 @@ export const getAgentResponse = async (history: ChatMessage[]) => {
         })
       }));
 
-    // Ensure alternating turns
     if (contents.length > 0 && contents[0].role === 'model') {
-      contents.unshift({ role: 'user', parts: [{ text: "Namaste" }] });
+      contents.unshift({ role: 'user', parts: [{ text: "Hello" }] });
     }
 
     const response = await ai.models.generateContent({
@@ -61,17 +55,15 @@ export const getAgentResponse = async (history: ChatMessage[]) => {
 
     return { text: response.text || "Main sun raha hoon. Bolte rahiye..." };
   } catch (error: any) {
-    console.error("Gemini Critical Debug:", error);
+    console.error("DEBUG: Gemini API Call Failed:", error);
     
-    // Extracting the actual message from the API error
-    let rawError = error?.message || error?.toString() || "Unknown API Error";
+    const errorMessage = error?.message || error?.toString() || "";
     
-    if (rawError.includes("API_KEY_INVALID")) {
-      return { text: "⚠️ GOOGLE ERROR: Your API Key is invalid. Re-copy it from Google AI Studio.", error: true };
+    if (errorMessage.includes("API key not found") || errorMessage.includes("403")) {
+      return { text: "⚠️ Technical Error: The Google API Key is not being picked up correctly from Vercel. Please check your project's Environment Variables.", error: true };
     }
     
-    // Display the raw error so we can diagnose exactly what's wrong with the Google project
-    return { text: `⚠️ API Error: ${rawError}`, error: true };
+    return { text: "⚠️ Connection issue. Please try sending your message again.", error: true };
   }
 };
 
@@ -92,10 +84,7 @@ export const parseAgentSummary = (text: string) => {
 
 export const generatePromoBanner = async (shopName: string, promotion: string) => {
   try {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) return null;
-    
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
