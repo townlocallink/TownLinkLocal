@@ -27,7 +27,7 @@ export const getAgentResponse = async (history: ChatMessage[]) => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
     
-    // Gemini requires turn-based history to START with 'user' role.
+    // Clean history: Must start with USER and alternate.
     const turnHistory = history
       .filter(m => m.role !== 'system')
       .map(m => ({
@@ -40,11 +40,11 @@ export const getAgentResponse = async (history: ChatMessage[]) => {
         })
       }));
 
-    // Prepend dummy user message if history starts with model greeting
+    // If history starts with model greeting, prepend a starting user message
     if (turnHistory.length > 0 && turnHistory[0].role === 'model') {
       turnHistory.unshift({
         role: 'user',
-        parts: [{ text: "Hello Sahayak, I need some help today." }]
+        parts: [{ text: "Hello Sahayak, I need help finding something." }]
       });
     }
 
@@ -58,15 +58,30 @@ export const getAgentResponse = async (history: ChatMessage[]) => {
     });
 
     return {
-      text: response.text || "I'm listening...",
+      text: response.text || "I'm listening... tell me more?",
     };
   } catch (error: any) {
-    console.error("Gemini API Error:", error);
+    console.error("Gemini Error:", error);
     return { 
       text: "Connection thoda weak hai. Ek baar phir try karein?", 
       error: true 
     };
   }
+};
+
+export const parseAgentSummary = (text: string) => {
+  try {
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (parsed.category) {
+        const found = CATEGORIES.find(c => c.toLowerCase() === parsed.category.toLowerCase());
+        parsed.category = found || "Other";
+      }
+      return parsed;
+    }
+  } catch (e) {}
+  return null;
 };
 
 export const generatePromoBanner = async (shopName: string, promotion: string) => {
@@ -91,19 +106,4 @@ export const generatePromoBanner = async (shopName: string, promotion: string) =
   } catch (e) {
     return null;
   }
-};
-
-export const parseAgentSummary = (text: string) => {
-  try {
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      if (parsed.category) {
-        const found = CATEGORIES.find(c => c.toLowerCase() === parsed.category.toLowerCase());
-        parsed.category = found || "Other";
-      }
-      return parsed;
-    }
-  } catch (e) {}
-  return null;
 };

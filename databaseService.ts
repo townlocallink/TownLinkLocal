@@ -14,20 +14,20 @@ import {
 } from 'firebase/firestore';
 import { UserProfile, ShopProfile, ProductRequest, Offer, Order, DailyUpdate } from './types';
 
-// Updated with your project details from the screenshots
+// Matching your Firebase Console Screenshot exactly
 const firebaseConfig = {
   apiKey: "AIzaSyDiEH7WGW6plRI0oAzPQkPMQpTSHfpaXMQ",
   authDomain: "locallink-town.firebaseapp.com",
   projectId: "locallink-town",
   storageBucket: "locallink-town.firebasestorage.app",
   messagingSenderId: "213164605800",
-  appId: "1:213164605800:web:f3c7761b11df9eafe596dd"
+  appId: "1:213164605800:web:f3c7761b11df9eafe596dd",
+  measurementId: "G-C3LCEMNQP5"
 };
 
 let db: Firestore | null = null;
 let cloudActive = false;
 
-// Functional wrapper to prevent module-level crashes
 const getDb = (): Firestore | null => {
   if (db) return db;
   try {
@@ -36,14 +36,14 @@ const getDb = (): Firestore | null => {
     cloudActive = true;
     return db;
   } catch (e) {
-    console.warn("LocalLink: Database offline. Using local-first mode.", e);
+    console.warn("LocalLink: Database offline. Check config.", e);
     return null;
   }
 };
 
 export const dbService = {
   isCloudActive: () => {
-    getDb(); // Trigger check
+    getDb();
     return cloudActive;
   },
   
@@ -54,7 +54,6 @@ export const dbService = {
       const querySnapshot = await getDocs(collection(firestore, "users"));
       return querySnapshot.docs.map(doc => doc.data() as UserProfile | ShopProfile);
     } catch (e) {
-      console.error("Cloud Error (loadUsers):", e);
       return [];
     }
   },
@@ -70,15 +69,13 @@ export const dbService = {
         getDocs(query(collection(firestore, "updates"), orderBy("createdAt", "desc"), limit(50)))
       ]);
 
-      const now = Date.now();
       return {
         requests: reqs.docs.map(d => d.data() as ProductRequest),
         offers: offs.docs.map(d => d.data() as Offer),
         orders: ords.docs.map(d => d.data() as Order),
-        updates: upds.docs.map(d => d.data() as DailyUpdate).filter(u => u.expiresAt > now)
+        updates: upds.docs.map(d => d.data() as DailyUpdate).filter(u => u.expiresAt > Date.now())
       };
     } catch (e) {
-      console.error("Cloud Error (loadMarketData):", e);
       return { requests: [], offers: [], orders: [], updates: [] };
     }
   },
@@ -103,9 +100,7 @@ export const dbService = {
       for (const user of users) {
         await setDoc(doc(firestore, "users", user.id), user, { merge: true });
       }
-    } catch (e) {
-      console.error("Cloud Error (saveUsers):", e);
-    }
+    } catch (e) {}
   },
 
   updateUserProfile: async (id: string, data: Partial<UserProfile | ShopProfile>) => {
@@ -113,25 +108,16 @@ export const dbService = {
     if (!firestore) return;
     try {
       await setDoc(doc(firestore, "users", id), data, { merge: true });
-    } catch (e) {
-      console.error("Cloud Error (updateUserProfile):", e);
-    }
+    } catch (e) {}
   },
 
   saveItem: async (id: string, type: 'request' | 'offer' | 'order' | 'update', data: any) => {
     const firestore = getDb();
     if (!firestore) return;
     try {
-      const colMap: Record<string, string> = {
-        'request': 'requests',
-        'offer': 'offers',
-        'order': 'orders',
-        'update': 'updates'
-      };
+      const colMap: Record<string, string> = { 'request': 'requests', 'offer': 'offers', 'order': 'orders', 'update': 'updates' };
       const colName = colMap[type] || type;
       await setDoc(doc(firestore, colName, id), data, { merge: true });
-    } catch (e) {
-      console.error(`Cloud Error (saveItem ${type}):`, e);
-    }
+    } catch (e) {}
   }
 };
