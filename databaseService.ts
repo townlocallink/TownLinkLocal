@@ -1,4 +1,4 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { 
   getFirestore, 
   collection, 
@@ -23,11 +23,16 @@ const firebaseConfig = {
   measurementId: "G-C3LCEMNQP5"
 };
 
+let app: FirebaseApp;
+let db: Firestore;
+
 const getDb = (): Firestore => {
+  if (db) return db;
   try {
     const apps = getApps();
-    const app = apps.length > 0 ? apps[0] : initializeApp(firebaseConfig);
-    return getFirestore(app);
+    app = apps.length > 0 ? apps[0] : initializeApp(firebaseConfig);
+    db = getFirestore(app);
+    return db;
   } catch (e) {
     console.error("Firebase Initialization Critical Error:", e);
     throw new Error("Firestore is currently unavailable.");
