@@ -25,9 +25,15 @@ CRITICAL:
 
 export const getAgentResponse = async (history: ChatMessage[]) => {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+    const apiKey = process.env.API_KEY as string;
+    if (!apiKey) {
+      console.error("LocalLink: No API_KEY found in process.env");
+      return { text: "Error: API Key missing in environment.", error: true };
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
     
-    // Clean history: Must start with USER and alternate.
+    // Gemini requires turn-based history to START with 'user' role.
     const turnHistory = history
       .filter(m => m.role !== 'system')
       .map(m => ({
@@ -40,11 +46,11 @@ export const getAgentResponse = async (history: ChatMessage[]) => {
         })
       }));
 
-    // If history starts with model greeting, prepend a starting user message
+    // If history starts with model greeting, prepend a dummy user message to satisfy role sequence
     if (turnHistory.length > 0 && turnHistory[0].role === 'model') {
       turnHistory.unshift({
         role: 'user',
-        parts: [{ text: "Hello Sahayak, I need help finding something." }]
+        parts: [{ text: "Hi Sahayak, I need to buy something." }]
       });
     }
 
@@ -58,12 +64,21 @@ export const getAgentResponse = async (history: ChatMessage[]) => {
     });
 
     return {
-      text: response.text || "I'm listening... tell me more?",
+      text: response.text || "I'm here to help. Could you tell me more?",
     };
   } catch (error: any) {
-    console.error("Gemini Error:", error);
+    // Log the EXACT error to console so you can see if it's a billing issue
+    console.error("GEMINI API CRITICAL ERROR:", error);
+    
+    let userMsg = "Connection thoda weak hai. Ek baar phir try karein?";
+    if (error?.message?.includes("402") || error?.message?.includes("billing")) {
+      userMsg = "Billing setup incomplete. Please check Google AI Studio.";
+    } else if (error?.message?.includes("403")) {
+      userMsg = "API Key check karein, access denied.";
+    }
+
     return { 
-      text: "Connection thoda weak hai. Ek baar phir try karein?", 
+      text: userMsg, 
       error: true 
     };
   }
@@ -104,6 +119,7 @@ export const generatePromoBanner = async (shopName: string, promotion: string) =
     }
     return null;
   } catch (e) {
+    console.error("Banner Generation Error:", e);
     return null;
   }
 };
