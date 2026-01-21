@@ -65,8 +65,10 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages]);
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, isLoading]);
 
   const stopLiveSession = useCallback(() => {
     if (liveSessionRef.current) {
@@ -228,10 +230,10 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
       </div>
 
       {/* Chat Area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-5 bg-gray-50/30">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-5 bg-gray-50/30 no-scrollbar">
         {messages.map((m, i) => (
           <div key={i} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
-            <div className={`max-w-[85%] rounded-[20px] p-4 shadow-sm border transition-all ${
+            <div className={`max-w-[85%] rounded-[24px] p-4 shadow-sm border transition-all ${
               m.role === 'user' 
                 ? 'bg-indigo-600 text-white rounded-tr-none border-indigo-500' 
                 : 'bg-white text-gray-800 rounded-tl-none border-gray-100'
@@ -303,7 +305,7 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
           </div>
         </div>
         {image && (
-          <div className="mt-3 flex items-center gap-2 p-2 bg-indigo-50 rounded-lg">
+          <div className="mt-3 flex items-center gap-2 p-2 bg-indigo-50 rounded-lg animate-fade-in">
             <img src={image} className="w-10 h-10 rounded border object-cover" />
             <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-tight">Image attached</span>
             <button onClick={() => setImage(null)} className="ml-auto text-indigo-400 p-1 hover:text-red-500">✕</button>

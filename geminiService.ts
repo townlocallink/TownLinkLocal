@@ -10,7 +10,7 @@ export const CATEGORIES = [
 
 export const SYSTEM_INSTRUCTION = `
 You are "LocalLink Sahayak", a helpful Local Shopping Assistant for Indian Tier 2-4 towns.
-Help customers clarify what they want to buy.
+Help customers clarify what they want to buy from local shops.
 
 1. TONE: Warm, friendly, like a local shopkeeper. Use "Namaste" or "Ram Ram".
 2. CLARIFY: Ask 1-2 quick questions about size, brand, or quantity.
@@ -27,12 +27,24 @@ export const getAgentResponse = async (history: ChatMessage[]) => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
     
+    // API requires turn-based history to START with 'user' role.
+    // Our history might start with a 'model' greeting, so we adjust.
+    const chatHistory = history.filter(m => m.role !== 'system').map(m => ({
+      role: m.role,
+      parts: m.parts
+    }));
+
+    if (chatHistory.length > 0 && chatHistory[0].role === 'model') {
+      // Prepend a user intro to satisfy the user-model-user sequence
+      chatHistory.unshift({
+        role: 'user',
+        parts: [{ text: "Hello Sahayak, I need some help shopping." }]
+      });
+    }
+
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: history.map(m => ({ 
-        role: m.role === 'system' ? 'user' : m.role, 
-        parts: m.parts 
-      })),
+      contents: chatHistory,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         temperature: 0.7,
@@ -44,6 +56,7 @@ export const getAgentResponse = async (history: ChatMessage[]) => {
     };
   } catch (error: any) {
     console.error("Gemini Error:", error);
+    // Silent failure fallback
     return { 
       text: "Connection thoda weak hai. Ek baar phir try karein?", 
       error: true 
