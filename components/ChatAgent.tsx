@@ -112,7 +112,7 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
 
   const startLiveSession = async () => {
     try {
-      const apiKey = process.env.API_KEY;
+      const apiKey = process.env.NEXT_PUBLIC_API_KEY;
       if (!apiKey) {
         setMessages(prev => [...prev, { role: 'model', parts: [{ text: "Maaf kijiye, voice assistant abhi upalabdh nahi hai." }] }]);
         return;
