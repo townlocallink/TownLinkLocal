@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { UserProfile, ShopProfile, ProductRequest, Offer, Order, DailyUpdate } from './types';
 import Auth from './components/Auth';
 import CustomerDashboard from './components/CustomerDashboard';
@@ -7,7 +7,7 @@ import AdminDashboard from './components/AdminDashboard';
 import Confetti from './components/Confetti';
 import { dbService } from './databaseService';
 
-const SESSION_KEY = 'locallink_v14_active_user'; 
+const SESSION_KEY = 'locallink_v14_active_user';
 
 interface Notification {
   id: string;
@@ -26,43 +26,51 @@ const App: React.FC = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [globalPopup, setGlobalPopup] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
-  const [isCloudActive] = useState(dbService.isCloudActive());
+  const [isCloudActive, setIsCloudActive] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
-  
+
   const addNotification = useCallback((text: string, type: Notification['type']) => {
-    const n: Notification = { id: Math.random().toString(36).substr(2, 9), text, type, timestamp: Date.now() };
+    const n: Notification = {
+      id: Math.random().toString(36).substr(2, 9),
+      text,
+      type,
+      timestamp: Date.now()
+    };
     setNotifications(prev => [n, ...prev].slice(0, 30));
   }, []);
 
   useEffect(() => {
+    let unsubscribe = () => {};
+
     const initApp = async () => {
-      // 1. Restore User
+      // 1. Restore session (DO NOT wait for Firestore)
       const savedSession = localStorage.getItem(SESSION_KEY);
       if (savedSession) {
         try {
           const parsed = JSON.parse(savedSession);
-          const allUsers = await dbService.loadUsers();
-          const liveProfile = allUsers.find((u: any) => u.id === parsed.id);
-          if (liveProfile) setUser(liveProfile);
-          else setUser(parsed);
+          setUser(parsed);
         } catch (e) {
           console.error("Session restore failed", e);
         }
       }
 
-      // 2. Setup Real-time Listener
-      const unsubscribe = dbService.listenToMarketData((data) => {
+      // 2. Start Firestore listeners (non-blocking)
+      unsubscribe = dbService.listenToMarketData((data) => {
         setRequests(data.requests || []);
         setOffers(data.offers || []);
         setOrders(data.orders || []);
         setUpdates(data.updates || []);
-        setIsInitializing(false);
       });
 
-      return () => unsubscribe();
+      // 3. Cloud status (non-blocking)
+      setIsCloudActive(dbService.isCloudActive());
+
+      // 🔑 IMPORTANT: App is ready regardless of Firestore state
+      setIsInitializing(false);
     };
-    
+
     initApp();
+    return () => unsubscribe();
   }, []);
 
   const handleLogin = (u: UserProfile | ShopProfile) => {
@@ -82,10 +90,12 @@ const App: React.FC = () => {
       const updatedTotal = (userToUpdate.totalRatings || 0) + 1;
       const updatedRating = Number((((userToUpdate.rating * (updatedTotal - 1)) + r) / updatedTotal).toFixed(1));
       await dbService.updateUserProfile(tid, { rating: updatedRating, totalRatings: updatedTotal });
-      
+
       const targetOrd = orders.find(o => o.id === oid);
       if (targetOrd) {
-        const updatedOrder = type === 'shop' ? { ...targetOrd, shopRated: true } : { ...targetOrd, customerRated: true };
+        const updatedOrder = type === 'shop'
+          ? { ...targetOrd, shopRated: true }
+          : { ...targetOrd, customerRated: true };
         await dbService.saveItem(oid, 'order', updatedOrder);
       }
       addNotification(`Review submitted!`, 'system');
@@ -105,7 +115,9 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
         <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="text-indigo-600 font-black uppercase tracking-widest text-xs">Syncing Town Data...</p>
+        <p className="text-indigo-600 font-black uppercase tracking-widest text-xs">
+          Syncing Town Data...
+        </p>
       </div>
     );
   }
@@ -113,15 +125,6 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-4 md:p-8">
       {showConfetti && <Confetti />}
-      
-      {globalPopup && (
-        <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[3000] animate-bounce-in w-[90%] max-w-sm">
-          <div className="bg-indigo-600 border-2 border-indigo-400 text-white px-6 py-4 rounded-[32px] shadow-2xl flex items-center justify-between">
-            <p className="font-black text-[10px] uppercase tracking-widest">{globalPopup.message}</p>
-            <button onClick={() => setGlobalPopup(null)}>✕</button>
-          </div>
-        </div>
-      )}
 
       <div className="max-w-6xl mx-auto">
         {!user ? (
@@ -132,22 +135,20 @@ const App: React.FC = () => {
               <div className="flex items-center gap-3">
                 <span className="text-2xl">🛍️</span>
                 <div className="flex flex-col">
-                   <h1 className="text-3xl font-black italic tracking-tighter text-indigo-600 leading-none">LocalLink</h1>
-                   <div className="flex items-center gap-1.5 mt-1">
-                      <div className={`w-1.5 h-1.5 rounded-full ${isCloudActive ? 'bg-green-500 animate-pulse' : 'bg-amber-400'}`}></div>
-                      <span className="text-[8px] font-black uppercase tracking-widest text-gray-400">
-                        {isCloudActive ? 'Cloud Sync Active' : 'Offline Mode'}
-                      </span>
-                   </div>
+                  <h1 className="text-3xl font-black italic tracking-tighter text-indigo-600 leading-none">
+                    LocalLink
+                  </h1>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <div className={`w-1.5 h-1.5 rounded-full ${isCloudActive ? 'bg-green-500 animate-pulse' : 'bg-amber-400'}`}></div>
+                    <span className="text-[8px] font-black uppercase tracking-widest text-gray-400">
+                      {isCloudActive ? 'Cloud Sync Active' : 'Offline Mode'}
+                    </span>
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center gap-4">
-                <button onClick={() => setShowNotifications(!showNotifications)} className="relative w-12 h-12 bg-white border border-gray-100 rounded-2xl flex items-center justify-center">
-                  <span className="text-xl">🔔</span>
-                  {notifications.length > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[9px] font-black flex items-center justify-center rounded-full border-2 border-white">{notifications.length}</span>}
-                </button>
-                <button onClick={handleLogout} className="text-xs font-black text-gray-400 uppercase tracking-widest hover:text-red-500 px-2">Logout</button>
-              </div>
+              <button onClick={handleLogout} className="text-xs font-black text-gray-400 uppercase tracking-widest hover:text-red-500">
+                Logout
+              </button>
             </nav>
 
             {user.role === 'admin' ? (
@@ -155,69 +156,31 @@ const App: React.FC = () => {
                 dbService.saveUsers(data.users || []);
               }} />
             ) : user.role === 'customer' ? (
-              <CustomerDashboard 
-                user={user as UserProfile} 
+              <CustomerDashboard
+                user={user as UserProfile}
                 requests={requests.filter(r => r.customerId === user.id)}
-                offers={offers.filter(o => requests.some(r => r.id === o.requestId && r.customerId === user.id))}
+                offers={offers}
                 orders={orders.filter(o => o.customerId === user.id)}
                 updates={updates}
-                onNewRequest={async (req) => { 
+                onNewRequest={async (req) => {
                   await dbService.saveItem(req.id, 'request', req);
-                  addNotification("Request broadcasted!", "system"); 
+                  addNotification("Request broadcasted!", "system");
                 }}
                 onAcceptOffer={async (order) => {
-                  const reqToUpdate = requests.find(r => r.id === order.requestId);
-                  if (reqToUpdate) {
-                    await dbService.saveItem(reqToUpdate.id, 'request', { ...reqToUpdate, status: 'fulfilled' });
-                  }
-                  
-                  const otherOffers = offers.filter(o => o.requestId === order.requestId);
-                  for (const o of otherOffers) {
-                    await dbService.saveItem(o.id, 'offer', { ...o, status: o.id === order.offerId ? 'accepted' : 'rejected' });
-                  }
-
                   await dbService.saveItem(order.id, 'order', order);
                   setShowConfetti(true);
                   setTimeout(() => setShowConfetti(false), 5000);
                   addNotification("Order confirmed!", 'order');
                 }}
-                onUpdateUser={(u) => { setUser(u); localStorage.setItem(SESSION_KEY, JSON.stringify(u)); dbService.saveUsers([u]); }}
-                onSendMessage={async (id, msg) => { 
-                  const targetOff = offers.find(o => o.id === id);
-                  if (targetOff) {
-                    const updated = { ...targetOff, chatHistory: [...(targetOff.chatHistory || []), msg] };
-                    await dbService.saveItem(id, 'offer', updated);
-                  }
-                }}
-                onMarkReceived={async (id) => { 
-                  const target = orders.find(o => o.id === id);
-                  if (target) await dbService.saveItem(id, 'order', { ...target, status: 'delivered' });
-                }}
                 onSubmitRating={submitRating}
               />
             ) : (
-              <ShopOwnerDashboard 
+              <ShopOwnerDashboard
                 user={user as ShopProfile}
                 requests={requests}
-                totalGlobalRequests={requests.length}
                 offers={offers.filter(o => o.shopId === user.id)}
                 orders={orders.filter(o => o.shopId === user.id)}
-                onPostUpdate={async (upd) => {
-                  await dbService.saveItem(upd.id, 'update', upd);
-                  addNotification("Store updated!", "system");
-                }}
-                onSubmitOffer={async (off) => { 
-                  await dbService.saveItem(off.id, 'offer', off);
-                  addNotification("Quote sent!", "offer"); 
-                }}
                 onUpdateOrder={handleUpdateOrder}
-                onSendMessage={async (id, msg) => { 
-                   const targetOff = offers.find(o => o.id === id);
-                   if (targetOff) {
-                     const updated = { ...targetOff, chatHistory: [...(targetOff.chatHistory || []), msg] };
-                     await dbService.saveItem(id, 'offer', updated);
-                   }
-                }}
                 onSubmitRating={submitRating}
               />
             )}
