@@ -23,15 +23,19 @@ CRITICAL:
 - Do NOT use markdown code blocks for JSON.
 `;
 
+/**
+ * Robust fetch for the API response.
+ * If the API_KEY is missing from the environment, it returns a polite fallback
+ * rather than a technical error to the end user.
+ */
 export const getAgentResponse = async (history: ChatMessage[]) => {
   try {
-    // The key MUST come from process.env.API_KEY as per system requirements.
-    // If this is undefined, the Google SDK throws the "must be set" error.
     const apiKey = process.env.API_KEY;
 
     if (!apiKey) {
+      console.error("Environment Error: API_KEY is undefined.");
       return { 
-        text: "⚠️ CONFIGURATION ERROR: The API_KEY is missing from the environment. Please: \n1. Add 'API_KEY' to Vercel Environment Variables. \n2. Trigger a NEW REDEPLOY in Vercel.", 
+        text: "Kshama kijiye, abhi main thoda vyast hoon. Kripya kuch samay baad phir se koshish karein. (System is briefly unavailable).", 
         error: true 
       };
     }
@@ -65,13 +69,11 @@ export const getAgentResponse = async (history: ChatMessage[]) => {
 
     return { text: response.text || "Main sun raha hoon. Bolte rahiye..." };
   } catch (error: any) {
-    console.error("Gemini Critical Error:", error);
-    
-    if (error?.message?.includes("API Key")) {
-      return { text: "⚠️ API Key Error. Please ensure your Vercel project is redeployed with the correct key.", error: true };
-    }
-    
-    return { text: "⚠️ Connection issue. Please try sending your message again.", error: true };
+    console.error("Gemini Service Failure:", error);
+    return { 
+      text: "Maaf kijiye, connection mein thodi deri ho rahi hai. Kripya apna sandesh phir se bhejein.", 
+      error: true 
+    };
   }
 };
 

@@ -101,7 +101,7 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
     
     setMessages(prev => [...prev, { 
       role: 'model', 
-      parts: [{ text: `✅ Samjha! Maine aapka order "${newRequest.category}" category mein shops ko bhej diya hai.` }] 
+      parts: [{ text: `✅ Samjha! Maine aapka request "${newRequest.category}" category mein shops ko bhej diya hai.` }] 
     }]);
     
     setTimeout(() => {
@@ -114,7 +114,7 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
     try {
       const apiKey = process.env.API_KEY;
       if (!apiKey) {
-        setMessages(prev => [...prev, { role: 'model', parts: [{ text: "⚠️ System Error: API_KEY missing. Cannot start Voice AI." }] }]);
+        setMessages(prev => [...prev, { role: 'model', parts: [{ text: "Maaf kijiye, voice assistant abhi upalabdh nahi hai." }] }]);
         return;
       }
 
@@ -202,14 +202,6 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
 
     const result = await getAgentResponse(newMessages);
     setIsLoading(false);
-
-    if (result.error) {
-      setMessages(prev => [...prev, { 
-        role: 'model', 
-        parts: [{ text: result.text }] 
-      }]);
-      return;
-    }
 
     const finalizedData = parseAgentSummary(result.text);
     if (finalizedData && finalizedData.finalized) {
