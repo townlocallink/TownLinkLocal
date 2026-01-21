@@ -25,15 +25,20 @@ CRITICAL:
 
 export const getAgentResponse = async (history: ChatMessage[]) => {
   try {
-    const apiKey = process.env.API_KEY as string;
+    // Attempt to get the key from process.env (Vercel injected)
+    const apiKey = process.env.API_KEY;
+    
     if (!apiKey) {
-      console.error("LocalLink: No API_KEY found in process.env");
-      return { text: "Error: API Key missing in environment.", error: true };
+      console.error("LocalLink: API_KEY not found in environment.");
+      return { 
+        text: "⚠️ Environment Sync Error: The app cannot see your API_KEY. Please go to Vercel -> Deployments and click 'Redeploy' on your latest build to sync environment variables.", 
+        error: true 
+      };
     }
 
     const ai = new GoogleGenAI({ apiKey });
     
-    // Gemini requires turn-based history to START with 'user' role.
+    // Ensure history follows User -> Model pattern
     const turnHistory = history
       .filter(m => m.role !== 'system')
       .map(m => ({
@@ -46,11 +51,10 @@ export const getAgentResponse = async (history: ChatMessage[]) => {
         })
       }));
 
-    // If history starts with model greeting, prepend a dummy user message to satisfy role sequence
     if (turnHistory.length > 0 && turnHistory[0].role === 'model') {
       turnHistory.unshift({
         role: 'user',
-        parts: [{ text: "Hi Sahayak, I need to buy something." }]
+        parts: [{ text: "Hi Sahayak, I need to buy something from the market." }]
       });
     }
 
@@ -64,23 +68,21 @@ export const getAgentResponse = async (history: ChatMessage[]) => {
     });
 
     return {
-      text: response.text || "I'm here to help. Could you tell me more?",
+      text: response.text || "I'm listening. Tell me more?",
     };
   } catch (error: any) {
-    // Log the EXACT error to console so you can see if it's a billing issue
-    console.error("GEMINI API CRITICAL ERROR:", error);
+    console.error("Gemini Critical Error:", error);
     
     let userMsg = "Connection thoda weak hai. Ek baar phir try karein?";
-    if (error?.message?.includes("402") || error?.message?.includes("billing")) {
-      userMsg = "Billing setup incomplete. Please check Google AI Studio.";
-    } else if (error?.message?.includes("403")) {
-      userMsg = "API Key check karein, access denied.";
+    const errStr = error?.toString() || "";
+    
+    if (errStr.includes("402") || errStr.includes("quota") || errStr.includes("billing")) {
+      userMsg = "⚠️ Billing required: Please check your Google AI Studio billing status.";
+    } else if (errStr.includes("403") || errStr.includes("API key not valid")) {
+      userMsg = "⚠️ Invalid API Key: Please check the key in your Vercel Environment Variables.";
     }
 
-    return { 
-      text: userMsg, 
-      error: true 
-    };
+    return { text: userMsg, error: true };
   }
 };
 
@@ -101,7 +103,10 @@ export const parseAgentSummary = (text: string) => {
 
 export const generatePromoBanner = async (shopName: string, promotion: string) => {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) return null;
+    
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
@@ -119,7 +124,6 @@ export const generatePromoBanner = async (shopName: string, promotion: string) =
     }
     return null;
   } catch (e) {
-    console.error("Banner Generation Error:", e);
     return null;
   }
 };
