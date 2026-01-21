@@ -33,6 +33,15 @@ const ShopOwnerDashboard: React.FC<ShopOwnerDashboardProps> = ({
 
   const activeChatOffer = offers.find(o => o.id === activeChatOfferId);
 
+  // Normalize category for lead matching
+  const shopCategory = (user.category || "Other").trim().toLowerCase();
+  
+  const filteredRequests = requests.filter(r => {
+    if (r.status !== 'broadcasted') return false;
+    const reqCategory = (r.category || "Other").trim().toLowerCase();
+    return shopCategory === 'other' || reqCategory === shopCategory;
+  });
+
   const handlePostUpdate = () => {
     if (!updateText.trim()) return;
     const update: DailyUpdate = {
@@ -181,13 +190,13 @@ const ShopOwnerDashboard: React.FC<ShopOwnerDashboardProps> = ({
           <span className="bg-indigo-100 p-1 rounded-lg">📡</span> Nearby Leads
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {requests.length === 0 ? (
+          {filteredRequests.length === 0 ? (
             <div className="col-span-full py-20 text-center bg-white border-2 border-dashed border-gray-200 rounded-[32px]">
               <p className="text-gray-400 font-black text-lg uppercase">Scanning for leads...</p>
               <p className="text-[10px] text-gray-300 mt-2 uppercase font-bold">Try checking other categories later</p>
             </div>
           ) : (
-            requests.map(req => {
+            filteredRequests.map(req => {
               const myOffer = offers.find(o => o.requestId === req.id);
               return (
                 <div key={req.id} className={`p-6 rounded-[32px] shadow-sm border transition flex flex-col h-full ${

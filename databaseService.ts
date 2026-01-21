@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 import { UserProfile, ShopProfile, ProductRequest, Offer, Order, DailyUpdate } from './types';
 
-// Matching your Firebase Console Screenshot exactly
+// Hardcoded Firebase configuration from your project
 const firebaseConfig = {
   apiKey: "AIzaSyDiEH7WGW6plRI0oAzPQkPMQpTSHfpaXMQ",
   authDomain: "locallink-town.firebaseapp.com",
@@ -36,7 +36,7 @@ const getDb = (): Firestore | null => {
     cloudActive = true;
     return db;
   } catch (e) {
-    console.warn("LocalLink: Database offline. Check config.", e);
+    console.warn("LocalLink: Database connection failed.", e);
     return null;
   }
 };
@@ -76,6 +76,7 @@ export const dbService = {
         updates: upds.docs.map(d => d.data() as DailyUpdate).filter(u => u.expiresAt > Date.now())
       };
     } catch (e) {
+      console.error("Load Market Data Error:", e);
       return { requests: [], offers: [], orders: [], updates: [] };
     }
   },
@@ -83,13 +84,36 @@ export const dbService = {
   listenToMarketData: (callback: (data: any) => void) => {
     const firestore = getDb();
     if (!firestore) return () => {};
-    const collections = ["requests", "offers", "orders", "updates"];
-    const unsubscribers = collections.map(colName => {
-      return onSnapshot(collection(firestore, colName), async () => {
-        const data = await dbService.loadMarketData();
-        callback(data);
-      });
-    });
+
+    // Initial state object
+    const currentData = {
+      requests: [] as ProductRequest[],
+      offers: [] as Offer[],
+      orders: [] as Order[],
+      updates: [] as DailyUpdate[]
+    };
+
+    const emit = () => callback({ ...currentData });
+
+    const unsubscribers = [
+      onSnapshot(collection(firestore, "requests"), (snap) => {
+        currentData.requests = snap.docs.map(d => d.data() as ProductRequest);
+        emit();
+      }),
+      onSnapshot(collection(firestore, "offers"), (snap) => {
+        currentData.offers = snap.docs.map(d => d.data() as Offer);
+        emit();
+      }),
+      onSnapshot(collection(firestore, "orders"), (snap) => {
+        currentData.orders = snap.docs.map(d => d.data() as Order);
+        emit();
+      }),
+      onSnapshot(query(collection(firestore, "updates"), orderBy("createdAt", "desc"), limit(20)), (snap) => {
+        currentData.updates = snap.docs.map(d => d.data() as DailyUpdate).filter(u => u.expiresAt > Date.now());
+        emit();
+      })
+    ];
+
     return () => unsubscribers.forEach(unsub => unsub());
   },
 
@@ -118,6 +142,8 @@ export const dbService = {
       const colMap: Record<string, string> = { 'request': 'requests', 'offer': 'offers', 'order': 'orders', 'update': 'updates' };
       const colName = colMap[type] || type;
       await setDoc(doc(firestore, colName, id), data, { merge: true });
-    } catch (e) {}
+    } catch (e) {
+      console.error(`Save Item Error (${type}):`, e);
+    }
   }
 };
