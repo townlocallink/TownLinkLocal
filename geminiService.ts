@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { ChatMessage } from "./types";
 
@@ -25,7 +24,6 @@ CRITICAL:
 
 export const getAgentResponse = async (history: ChatMessage[]) => {
   try {
-    // Using requested VITE variable name
     const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
 
     if (!apiKey) {
