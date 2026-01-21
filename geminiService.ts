@@ -23,19 +23,14 @@ CRITICAL:
 - Do NOT use markdown code blocks for JSON.
 `;
 
-/**
- * Robust fetch for the API response.
- * If the API_KEY is missing from the environment, it returns a polite fallback
- * rather than a technical error to the end user.
- */
 export const getAgentResponse = async (history: ChatMessage[]) => {
   try {
     const apiKey = process.env.API_KEY;
 
     if (!apiKey) {
-      console.error("Environment Error: API_KEY is undefined.");
+      console.error("Environment Error: API_KEY is undefined. Ensure it is set in Vercel and redeployed.");
       return { 
-        text: "Kshama kijiye, abhi main thoda vyast hoon. Kripya kuch samay baad phir se koshish karein. (System is briefly unavailable).", 
+        text: "Namaste! Maaf kijiye, main abhi thoda vyast hoon. Kripya thodi der baad phir se koshish karein.", 
         error: true 
       };
     }
@@ -71,7 +66,7 @@ export const getAgentResponse = async (history: ChatMessage[]) => {
   } catch (error: any) {
     console.error("Gemini Service Failure:", error);
     return { 
-      text: "Maaf kijiye, connection mein thodi deri ho rahi hai. Kripya apna sandesh phir se bhejein.", 
+      text: "Kshama kijiye, network mein thodi deri ho rahi hai. Kripya apna sandesh phir se bhejein.", 
       error: true 
     };
   }
