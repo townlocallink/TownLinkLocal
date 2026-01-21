@@ -24,43 +24,27 @@ CRITICAL:
 `;
 
 export const getAgentResponse = async (history: ChatMessage[]) => {
-  const apiKey = process.env.API_KEY || "";
-  
-  if (!apiKey || apiKey.length < 10) {
-    return { 
-      text: "Developer: Please add your Gemini API_KEY to Vercel Settings.", 
-      error: true 
-    };
-  }
-
   try {
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
     
-    // Clean history: Gemini requires strictly alternating USER/MODEL starting with USER.
+    // Gemini requires turn-based history to START with 'user' role.
     const turnHistory = history
       .filter(m => m.role !== 'system')
       .map(m => ({
         role: m.role,
         parts: m.parts.map(p => {
-          // Fix: Correctly return either text or inlineData part to match the expected Part union type
-          // instead of an object that potentially contains both properties.
           if (p.inlineData) {
-            return { 
-              inlineData: { 
-                mimeType: p.inlineData.mimeType, 
-                data: p.inlineData.data 
-              } 
-            };
+            return { inlineData: { mimeType: p.inlineData.mimeType, data: p.inlineData.data } };
           }
           return { text: p.text || "" };
         })
       }));
 
-    // If history starts with model greeting, prepend a starting user message
+    // Prepend dummy user message if history starts with model greeting
     if (turnHistory.length > 0 && turnHistory[0].role === 'model') {
       turnHistory.unshift({
         role: 'user',
-        parts: [{ text: "Hello Sahayak, I need to find something in the market." }]
+        parts: [{ text: "Hello Sahayak, I need some help today." }]
       });
     }
 
@@ -74,15 +58,10 @@ export const getAgentResponse = async (history: ChatMessage[]) => {
     });
 
     return {
-      text: response.text || "I didn't quite catch that. Could you repeat?",
+      text: response.text || "I'm listening...",
     };
   } catch (error: any) {
     console.error("Gemini API Error:", error);
-    // Return specific error hint if available
-    const msg = error?.message || "";
-    if (msg.includes("403") || msg.includes("API_KEY_INVALID")) {
-      return { text: "API Key check karein, shayad invalid hai.", error: true };
-    }
     return { 
       text: "Connection thoda weak hai. Ek baar phir try karein?", 
       error: true 
@@ -91,19 +70,12 @@ export const getAgentResponse = async (history: ChatMessage[]) => {
 };
 
 export const generatePromoBanner = async (shopName: string, promotion: string) => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) return null;
-
   try {
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
-        parts: [
-          {
-            text: `Professional storefront banner for "${shopName}" promoting "${promotion}". Vibrant Indian retail style.`,
-          },
-        ],
+        parts: [{ text: `Professional storefront banner for "${shopName}" promoting "${promotion}". Vibrant Indian retail style.` }],
       },
     });
     
