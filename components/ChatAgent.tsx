@@ -1,4 +1,4 @@
-// Add missing React import
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { UserProfile, ChatMessage, ProductRequest } from '../types';
@@ -112,7 +112,13 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
 
   const startLiveSession = async () => {
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+      const apiKey = process.env.API_KEY;
+      if (!apiKey) {
+        setMessages(prev => [...prev, { role: 'model', parts: [{ text: "⚠️ System Error: API_KEY missing. Cannot start Voice AI." }] }]);
+        return;
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
       const inCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       const outCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       inputAudioCtxRef.current = inCtx;

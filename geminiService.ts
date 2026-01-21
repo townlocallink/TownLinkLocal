@@ -25,8 +25,18 @@ CRITICAL:
 
 export const getAgentResponse = async (history: ChatMessage[]) => {
   try {
-    // Standard initialization as per SDK rules
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // The key MUST come from process.env.API_KEY as per system requirements.
+    // If this is undefined, the Google SDK throws the "must be set" error.
+    const apiKey = process.env.API_KEY;
+
+    if (!apiKey) {
+      return { 
+        text: "⚠️ CONFIGURATION ERROR: The API_KEY is missing from the environment. Please: \n1. Add 'API_KEY' to Vercel Environment Variables. \n2. Trigger a NEW REDEPLOY in Vercel.", 
+        error: true 
+      };
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
     
     const contents = history
       .filter(m => m.role !== 'system')
@@ -55,17 +65,13 @@ export const getAgentResponse = async (history: ChatMessage[]) => {
 
     return { text: response.text || "Main sun raha hoon. Bolte rahiye..." };
   } catch (error: any) {
-    console.error("Gemini Error Detail:", error);
+    console.error("Gemini Critical Error:", error);
     
-    // If we get the "An API Key must be set" error, it's a deployment/injection issue.
-    if (error?.message?.includes("API Key must be set")) {
-      return { 
-        text: "⚠️ SYSTEM: The API Key is not yet active in this build. \n\n1. Double-check 'API_KEY' in Vercel Settings.\n2. You MUST click 'Deployments' and choose 'Redeploy' for the key to be injected into the code.", 
-        error: true 
-      };
+    if (error?.message?.includes("API Key")) {
+      return { text: "⚠️ API Key Error. Please ensure your Vercel project is redeployed with the correct key.", error: true };
     }
     
-    return { text: "⚠️ Connection issue. Please try again.", error: true };
+    return { text: "⚠️ Connection issue. Please try sending your message again.", error: true };
   }
 };
 
@@ -86,7 +92,10 @@ export const parseAgentSummary = (text: string) => {
 
 export const generatePromoBanner = async (shopName: string, promotion: string) => {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) return null;
+
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
