@@ -25,10 +25,10 @@ CRITICAL:
 
 export const getAgentResponse = async (history: ChatMessage[]) => {
   try {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    // Using requested VITE variable name
+    const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
 
     if (!apiKey) {
-      console.error("Environment Error: API_KEY is undefined. Ensure it is set in Vercel and redeployed.");
       return { 
         text: "Namaste! Maaf kijiye, main abhi thoda vyast hoon. Kripya thodi der baad phir se koshish karein.", 
         error: true 
@@ -89,7 +89,7 @@ export const parseAgentSummary = (text: string) => {
 
 export const generatePromoBanner = async (shopName: string, promotion: string) => {
   try {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
     if (!apiKey) return null;
 
     const ai = new GoogleGenAI({ apiKey });

@@ -112,7 +112,8 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
 
   const startLiveSession = async () => {
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      // Using requested VITE variable name
+      const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
       if (!apiKey) {
         setMessages(prev => [...prev, { role: 'model', parts: [{ text: "Maaf kijiye, voice assistant abhi upalabdh nahi hai." }] }]);
         return;
