@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { ChatMessage } from "./types";
 
@@ -9,32 +8,33 @@ export const CATEGORIES = [
 ];
 
 export const SYSTEM_INSTRUCTION = `
-You are "LocalLink Sahayak", a helpful Local Shopping Assistant for Indian Tier 2-4 towns.
+You are "LocalLink Sahayak", a helpful Local Shopping Assistant for Indian towns.
 Help customers clarify what they want to buy from local shops.
 
-1. TONE: Warm, friendly, like a local shopkeeper. Use "Namaste" or "Ram Ram".
-2. CLARIFY: Ask 1-2 quick questions about size, brand, or quantity.
-3. LANGUAGE: Use English, Hindi, or Hinglish based on user preference.
+1. TONE: Warm, friendly, local shopkeeper vibe. Use "Namaste".
+2. CLARIFY: Ask 1-2 quick questions about specifics (size, brand, quantity).
+3. LANGUAGE: Use English, Hindi, or Hinglish.
 4. SUMMARIZE: Once clear, summarize: "Thik hai, aapko [item] chahiye. Kya main ye shops ko bhej doon? (Yes/No)".
-5. CATEGORIZE: Use: ${CATEGORIES.join(", ")}.
+5. CATEGORIZE: Select ONE from: ${CATEGORIES.join(", ")}.
 
 CRITICAL:
-- If user says "Yes" to summary, output JSON: {"finalized": true, "summary": "Full summary", "category": "EXACT_CATEGORY"}.
-- Do NOT use markdown code blocks for JSON.
+- If user says "Yes" to summary, output ONLY this JSON: {"finalized": true, "summary": "Full summary of item and specs", "category": "EXACT_CATEGORY_NAME"}.
+- Do NOT use markdown blocks for the JSON.
 `;
 
 export const getAgentResponse = async (history: ChatMessage[]) => {
+  // Respecting environment-specific variable name requirement
+  const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
+
+  if (!apiKey) {
+    console.error("Gemini API Key missing from environment.");
+    return { 
+      text: "Namaste! Maaf kijiye, connectivity mein thodi samasya hai. Kripya thodi der baad koshish karein.", 
+      error: true 
+    };
+  }
+
   try {
-    // API key must be obtained exclusively from the environment variable process.env.API_KEY
-    const apiKey = process.env.API_KEY;
-
-    if (!apiKey) {
-      return { 
-        text: "Namaste! Maaf kijiye, main abhi thoda vyast hoon. Kripya thodi der baad phir se koshish karein.", 
-        error: true 
-      };
-    }
-
     const ai = new GoogleGenAI({ apiKey });
     
     const contents = history
@@ -49,6 +49,7 @@ export const getAgentResponse = async (history: ChatMessage[]) => {
         })
       }));
 
+    // Ensure user starts the conversation context for the model
     if (contents.length > 0 && contents[0].role === 'model') {
       contents.unshift({ role: 'user', parts: [{ text: "Hello" }] });
     }
@@ -62,11 +63,15 @@ export const getAgentResponse = async (history: ChatMessage[]) => {
       },
     });
 
-    return { text: response.text || "Main sun raha hoon. Bolte rahiye..." };
+    if (!response || !response.text) {
+      throw new Error("Empty response from Gemini");
+    }
+
+    return { text: response.text };
   } catch (error: any) {
-    console.error("Gemini Service Failure:", error);
+    console.error("Gemini Service Error:", error);
     return { 
-      text: "Kshama kijiye, network mein thodi deri ho rahi hai. Kripya apna sandesh phir se bhejein.", 
+      text: "Kshama kijiye, network thoda dhima hai. Kripya apna sandesh phir se bhejein.", 
       error: true 
     };
   }
@@ -88,16 +93,15 @@ export const parseAgentSummary = (text: string) => {
 };
 
 export const generatePromoBanner = async (shopName: string, promotion: string) => {
-  try {
-    // API key must be obtained exclusively from the environment variable process.env.API_KEY
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) return null;
+  const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
+  if (!apiKey) return null;
 
+  try {
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
-        parts: [{ text: `Professional storefront banner for "${shopName}" promoting "${promotion}". Vibrant Indian retail style.` }],
+        parts: [{ text: `Professional, colorful Indian storefront banner for "${shopName}" promoting "${promotion}". Vibrant retail colors.` }],
       },
     });
     
@@ -105,13 +109,12 @@ export const generatePromoBanner = async (shopName: string, promotion: string) =
     if (candidate) {
       for (const part of candidate.content.parts) {
         if (part.inlineData) {
-          const base64EncodeString: string = part.inlineData.data;
-          return `data:image/png;base64,${base64EncodeString}`;
+          return `data:image/png;base64,${part.inlineData.data}`;
         }
       }
     }
-    return null;
   } catch (e) {
-    return null;
+    console.error("Banner Generation Error:", e);
   }
+  return null;
 };

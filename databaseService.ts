@@ -1,4 +1,4 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { 
   getFirestore, 
   collection, 
@@ -9,8 +9,7 @@ import {
   query, 
   orderBy, 
   limit, 
-  Firestore,
-  updateDoc
+  Firestore
 } from 'firebase/firestore';
 import { UserProfile, ShopProfile, ProductRequest, Offer, Order, DailyUpdate } from './types';
 
@@ -25,42 +24,50 @@ const firebaseConfig = {
 };
 
 let dbInstance: Firestore | null = null;
-let cloudActive = false;
 
-const getDb = (): Firestore | null => {
+const getDb = (): Firestore => {
   if (dbInstance) return dbInstance;
+  
   try {
     const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
     dbInstance = getFirestore(app);
-    cloudActive = true;
     return dbInstance;
   } catch (e) {
-    console.error("LocalLink Firebase Init Failed:", e);
-    return null;
+    console.error("Firebase Initialization Critical Error:", e);
+    throw e;
   }
 };
 
 export const dbService = {
   isCloudActive: () => {
-    getDb();
-    return cloudActive;
+    try {
+      getDb();
+      return true;
+    } catch (e) {
+      return false;
+    }
   },
   
   loadUsers: async (): Promise<(UserProfile | ShopProfile)[]> => {
-    const firestore = getDb();
-    if (!firestore) return [];
     try {
+      const firestore = getDb();
       const querySnapshot = await getDocs(collection(firestore, "users"));
       return querySnapshot.docs.map(doc => doc.data() as UserProfile | ShopProfile);
     } catch (e) {
+      console.error("Load Users Failed:", e);
       return [];
     }
   },
 
   listenToMarketData: (callback: (data: any) => void) => {
-    const firestore = getDb();
-    if (!firestore) return () => {};
-
+    let firestore: Firestore;
+    try {
+      firestore = getDb();
+    } catch (e) {
+      console.error("Cannot listen to market data - Firestore unavailable. Returning empty cleanup.");
+      return () => {};
+    }
+    
     const currentData = {
       requests: [] as ProductRequest[],
       offers: [] as Offer[],
@@ -68,7 +75,9 @@ export const dbService = {
       updates: [] as DailyUpdate[]
     };
 
-    const emit = () => callback({ ...currentData });
+    const emit = () => {
+      callback({ ...currentData });
+    };
 
     const unsubscribers = [
       onSnapshot(collection(firestore, "requests"), (snap) => {
@@ -93,27 +102,28 @@ export const dbService = {
   },
 
   saveUsers: async (users: (UserProfile | ShopProfile)[]) => {
-    const firestore = getDb();
-    if (!firestore) return;
     try {
+      const firestore = getDb();
       for (const user of users) {
         await setDoc(doc(firestore, "users", user.id), user, { merge: true });
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error("Save Users Failed:", e);
+    }
   },
 
   updateUserProfile: async (id: string, data: Partial<UserProfile | ShopProfile>) => {
-    const firestore = getDb();
-    if (!firestore) return;
     try {
+      const firestore = getDb();
       await setDoc(doc(firestore, "users", id), data, { merge: true });
-    } catch (e) {}
+    } catch (e) {
+      console.error("Update User Failed:", e);
+    }
   },
 
   saveItem: async (id: string, type: 'request' | 'offer' | 'order' | 'update', data: any) => {
-    const firestore = getDb();
-    if (!firestore) return;
     try {
+      const firestore = getDb();
       const colMap: Record<string, string> = { 'request': 'requests', 'offer': 'offers', 'order': 'orders', 'update': 'updates' };
       const colName = colMap[type] || type;
       await setDoc(doc(firestore, colName, id), data, { merge: true });
