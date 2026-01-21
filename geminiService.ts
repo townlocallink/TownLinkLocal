@@ -24,9 +24,14 @@ CRITICAL:
 `;
 
 export const getAgentResponse = async (history: ChatMessage[]) => {
+  const apiKey = process.env.API_KEY;
+  
+  if (!apiKey) {
+    return { text: "⚠️ SYSTEM: API_KEY is empty. Please check your Vercel Environment Variables.", error: true };
+  }
+
   try {
-    // Attempting to use the key directly without pre-checking to avoid 'falsy' proxy issues
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+    const ai = new GoogleGenAI({ apiKey });
     
     const contents = history
       .filter(m => m.role !== 'system')
@@ -40,11 +45,9 @@ export const getAgentResponse = async (history: ChatMessage[]) => {
         })
       }));
 
+    // Ensure alternating turns
     if (contents.length > 0 && contents[0].role === 'model') {
-      contents.unshift({
-        role: 'user',
-        parts: [{ text: "Hello Sahayak, I need help buying something." }]
-      });
+      contents.unshift({ role: 'user', parts: [{ text: "Namaste" }] });
     }
 
     const response = await ai.models.generateContent({
@@ -56,22 +59,19 @@ export const getAgentResponse = async (history: ChatMessage[]) => {
       },
     });
 
-    return {
-      text: response.text || "I'm listening. Tell me more?",
-    };
+    return { text: response.text || "Main sun raha hoon. Bolte rahiye..." };
   } catch (error: any) {
-    console.error("Gemini Critical Error:", error);
+    console.error("Gemini Critical Debug:", error);
     
-    let userMsg = "Thoda connection problem hai. Ek baar phir try karein?";
-    const errText = error?.toString() || "";
+    // Extracting the actual message from the API error
+    let rawError = error?.message || error?.toString() || "Unknown API Error";
     
-    if (errText.includes("API_KEY_INVALID") || errText.includes("403")) {
-      userMsg = "⚠️ API Key Issue: Please ensure your Vercel API_KEY matches the one in Google AI Studio.";
-    } else if (errText.includes("402") || errText.includes("quota")) {
-      userMsg = "⚠️ Limit reached: Please check billing on Google AI Studio.";
+    if (rawError.includes("API_KEY_INVALID")) {
+      return { text: "⚠️ GOOGLE ERROR: Your API Key is invalid. Re-copy it from Google AI Studio.", error: true };
     }
-
-    return { text: userMsg, error: true };
+    
+    // Display the raw error so we can diagnose exactly what's wrong with the Google project
+    return { text: `⚠️ API Error: ${rawError}`, error: true };
   }
 };
 
@@ -92,7 +92,10 @@ export const parseAgentSummary = (text: string) => {
 
 export const generatePromoBanner = async (shopName: string, promotion: string) => {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) return null;
+    
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
