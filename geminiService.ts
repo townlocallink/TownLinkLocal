@@ -23,11 +23,10 @@ CRITICAL:
 `;
 
 export const getAgentResponse = async (history: ChatMessage[]) => {
-  // Respecting environment-specific variable name requirement
-  const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
+  const apiKey = process.env.API_KEY;
 
   if (!apiKey) {
-    console.error("Gemini API Key missing from environment.");
+    console.error("Gemini API Key missing.");
     return { 
       text: "Namaste! Maaf kijiye, connectivity mein thodi samasya hai. Kripya thodi der baad koshish karein.", 
       error: true 
@@ -49,7 +48,6 @@ export const getAgentResponse = async (history: ChatMessage[]) => {
         })
       }));
 
-    // Ensure user starts the conversation context for the model
     if (contents.length > 0 && contents[0].role === 'model') {
       contents.unshift({ role: 'user', parts: [{ text: "Hello" }] });
     }
@@ -63,11 +61,7 @@ export const getAgentResponse = async (history: ChatMessage[]) => {
       },
     });
 
-    if (!response || !response.text) {
-      throw new Error("Empty response from Gemini");
-    }
-
-    return { text: response.text };
+    return { text: response.text || "" };
   } catch (error: any) {
     console.error("Gemini Service Error:", error);
     return { 
@@ -93,7 +87,7 @@ export const parseAgentSummary = (text: string) => {
 };
 
 export const generatePromoBanner = async (shopName: string, promotion: string) => {
-  const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
+  const apiKey = process.env.API_KEY;
   if (!apiKey) return null;
 
   try {

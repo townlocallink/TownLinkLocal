@@ -1,4 +1,4 @@
-import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
   getFirestore, 
   collection, 
@@ -23,18 +23,14 @@ const firebaseConfig = {
   measurementId: "G-C3LCEMNQP5"
 };
 
-let dbInstance: Firestore | null = null;
-
 const getDb = (): Firestore => {
-  if (dbInstance) return dbInstance;
-  
   try {
-    const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-    dbInstance = getFirestore(app);
-    return dbInstance;
+    const apps = getApps();
+    const app = apps.length > 0 ? apps[0] : initializeApp(firebaseConfig);
+    return getFirestore(app);
   } catch (e) {
     console.error("Firebase Initialization Critical Error:", e);
-    throw e;
+    throw new Error("Firestore is currently unavailable.");
   }
 };
 
@@ -64,7 +60,7 @@ export const dbService = {
     try {
       firestore = getDb();
     } catch (e) {
-      console.error("Cannot listen to market data - Firestore unavailable. Returning empty cleanup.");
+      console.error("Cannot listen to market data - Firestore unavailable.");
       return () => {};
     }
     
