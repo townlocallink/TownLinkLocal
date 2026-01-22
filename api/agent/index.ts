@@ -46,9 +46,6 @@ export default async function handler(req: any, res: any) {
     }));
 
     // Robust Role Sequence Fixer
-    // Gemini API requirements:
-    // 1. Must start with 'user'
-    // 2. Roles must strictly alternate: user, model, user, model...
     const sequencedContents: any[] = [];
     for (const msg of contents) {
       if (sequencedContents.length === 0) {
@@ -60,8 +57,6 @@ export default async function handler(req: any, res: any) {
         if (msg.role !== lastRole) {
           sequencedContents.push(msg);
         } else {
-          // If consecutive roles are the same (e.g. User followed by User due to previous failure),
-          // we replace the previous entry with the newer one to maintain continuity.
           sequencedContents[sequencedContents.length - 1] = msg;
         }
       }
@@ -76,14 +71,30 @@ export default async function handler(req: any, res: any) {
       contents: sequencedContents,
       config: { 
         systemInstruction: SYSTEM_INSTRUCTION,
-        temperature: 0.7 
+        temperature: 0.7,
+        // Disable safety filters to prevent false positives on harmless words like "bat"
+        // Fix: Use 'as any' to satisfy strict TypeScript definitions for safety category and threshold strings
+        safetySettings: [
+          { category: "HARM_CATEGORY_HARASSMENT" as any, threshold: "BLOCK_NONE" as any },
+          { category: "HARM_CATEGORY_HATE_SPEECH" as any, threshold: "BLOCK_NONE" as any },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT" as any, threshold: "BLOCK_NONE" as any },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT" as any, threshold: "BLOCK_NONE" as any },
+          { category: "HARM_CATEGORY_CIVIC_INTEGRITY" as any, threshold: "BLOCK_NONE" as any }
+        ]
       }
     });
+
+    // Handle blocked or empty responses gracefully
+    const candidate = response.candidates?.[0];
+    if (candidate?.finishReason === 'SAFETY') {
+      return res.status(200).json({ text: "Namaste! Main kshama chahta hoon, par main is vishay par baat nahi kar sakta. Kya hum kisi aur cheez ke baare mein baat karein?" });
+    }
 
     const text = response.text || "Namaste! Main samajh nahi paaya. Kripya fir se batayein.";
     return res.status(200).json({ text });
   } catch (err: any) {
     console.error("Gemini API Error Handler:", err);
-    return res.status(500).json({ error: err.message || "Something went wrong with Sahayak's brain." });
+    // Return a generic user-friendly message instead of crashing the front-end
+    return res.status(200).json({ text: "Namaste! Thodi takleef aa rahi hai. Kripya fir se batayein ya 'Cricket bat' jaise clear shabdon ka upyog karein." });
   }
 }

@@ -96,7 +96,8 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
       description: finalizedData.summary,
       status: 'broadcasted',
       createdAt: Date.now(),
-      image: image || undefined
+      // Fix: Firestore doesn't allow 'undefined'. Use 'null' or omit.
+      image: image || null
     };
     
     setMessages(prev => [...prev, { 
@@ -201,9 +202,7 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
     setImage(null);
     setIsLoading(true);
 
-    // CRITICAL: Gemini history MUST start with a 'user' message.
-    // Our very first message (index 0) is a UI 'model' greeting. We skip it
-    // when sending history to the backend API to ensure the sequence is valid.
+    // Skip initial greeting to ensure history begins with 'user'
     const apiHistory = nextMessages.slice(1);
 
     const result = await getAgentResponse(apiHistory);
