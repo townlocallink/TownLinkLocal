@@ -20,7 +20,7 @@ export default async function handler(req: any, res: any) {
 
     const contents = (history || []).map((m: any) => ({
       role: m.role,
-      parts: [{ text: m.text }]
+      parts: m.parts
     }));
 
     const response = await ai.models.generateContent({
