@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
-import { UserProfile, ShopProfile, ProductRequest, Offer, Order, DailyUpdate } from './types';
+import { UserProfile, ShopProfile, ProductRequest, Offer, Order, DailyUpdate, DirectMessage } from './types';
 import Auth from './components/Auth';
 import CustomerDashboard from './components/CustomerDashboard';
 import ShopOwnerDashboard from './components/ShopOwnerDashboard';
@@ -84,6 +85,26 @@ const App: React.FC = () => {
     localStorage.removeItem(SESSION_KEY);
   };
 
+  // Fix: Added missing handler for updating user profile
+  const handleUpdateUser = async (u: UserProfile | ShopProfile) => {
+    setUser(u);
+    localStorage.setItem(SESSION_KEY, JSON.stringify(u));
+    await dbService.updateUserProfile(u.id, u);
+  };
+
+  // Fix: Added missing handler for sending direct messages
+  const handleSendMessage = async (offerId: string, msg: DirectMessage, recipientId: string) => {
+    const targetOffer = offers.find(o => o.id === offerId);
+    if (targetOffer) {
+      const updatedOffer = {
+        ...targetOffer,
+        chatHistory: [...(targetOffer.chatHistory || []), msg]
+      };
+      await dbService.saveItem(offerId, 'offer', updatedOffer);
+      addNotification(`New message to ${recipientId}`, 'chat');
+    }
+  };
+
   const submitRating = async (tid: string, r: number, oid: string, type: 'shop' | 'customer') => {
     const userToUpdate = (await dbService.loadUsers()).find(u => u.id === tid);
     if (userToUpdate) {
@@ -109,6 +130,18 @@ const App: React.FC = () => {
       await dbService.saveItem(orderId, 'order', updatedOrder);
       addNotification("Order status updated!", 'order');
     }
+  };
+
+  // Fix: Added missing handler for posting updates to Town Square
+  const handlePostUpdate = async (update: DailyUpdate) => {
+    await dbService.saveItem(update.id, 'update', update);
+    addNotification("Broadcasted to Town Square!", 'system');
+  };
+
+  // Fix: Added missing handler for submitting offers
+  const handleSubmitOffer = async (offer: Offer) => {
+    await dbService.saveItem(offer.id, 'offer', offer);
+    addNotification("Quote sent successfully!", 'lead');
   };
 
   if (isInitializing && user) {
@@ -172,15 +205,22 @@ const App: React.FC = () => {
                   setTimeout(() => setShowConfetti(false), 5000);
                   addNotification("Order confirmed!", 'order');
                 }}
+                onUpdateUser={handleUpdateUser}
+                onSendMessage={handleSendMessage}
+                onMarkReceived={(oid) => handleUpdateOrder(oid, 'delivered')}
                 onSubmitRating={submitRating}
               />
             ) : (
               <ShopOwnerDashboard
                 user={user as ShopProfile}
                 requests={requests}
+                totalGlobalRequests={requests.length}
                 offers={offers.filter(o => o.shopId === user.id)}
                 orders={orders.filter(o => o.shopId === user.id)}
+                onPostUpdate={handlePostUpdate}
+                onSubmitOffer={handleSubmitOffer}
                 onUpdateOrder={handleUpdateOrder}
+                onSendMessage={handleSendMessage}
                 onSubmitRating={submitRating}
               />
             )}

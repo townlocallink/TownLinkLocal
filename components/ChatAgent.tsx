@@ -48,6 +48,7 @@ interface ChatAgentProps {
 }
 
 const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => {
+  // Initial message is a UI greeting, NOT sent to the API as history
   const [messages, setMessages] = useState<ChatMessage[]>([
     { role: 'model', parts: [{ text: `Namaste ${user.name}! I'm LocalLink Sahayak. Aapko market se kya chahiye?` }] }
   ]);
@@ -193,14 +194,25 @@ const ChatAgent: React.FC<ChatAgentProps> = ({ user, onClose, onFinalized }) => 
       if (base64Data) userParts.push({ inlineData: { mimeType: 'image/jpeg', data: base64Data } });
     }
 
-    const newMessages: ChatMessage[] = [...messages, { role: 'user', parts: userParts }];
-    setMessages(newMessages);
+    const newUserMessage: ChatMessage = { role: 'user', parts: userParts };
+    const nextMessages: ChatMessage[] = [...messages, newUserMessage];
+    setMessages(nextMessages);
     setInput('');
     setImage(null);
     setIsLoading(true);
 
-    const result = await getAgentResponse(newMessages);
+    // CRITICAL: Gemini history MUST start with a 'user' message.
+    // Our very first message (index 0) is a UI 'model' greeting. We skip it
+    // when sending history to the backend API to ensure the sequence is valid.
+    const apiHistory = nextMessages.slice(1);
+
+    const result = await getAgentResponse(apiHistory);
     setIsLoading(false);
+
+    if (result.error) {
+      setMessages(prev => [...prev, { role: 'model', parts: [{ text: result.text }] }]);
+      return;
+    }
 
     const finalizedData = parseAgentSummary(result.text);
     if (finalizedData && finalizedData.finalized) {
